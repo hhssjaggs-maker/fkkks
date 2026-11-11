@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Fontaine AI · Furina & Focalors</title>
+<meta name="theme-color" content="#c8d8e1">
+<link rel="icon" href="assets/furina-icon.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-mode="furina" data-cloud="0">
+
+<!-- พื้นหลังทะเล -->
+<div class="bg bg-furina"></div>
+<div class="bg bg-code"></div>
+<canvas id="bubbles"></canvas>
+<div class="waves" aria-hidden="true">
+  <svg class="wave w1" viewBox="0 0 1440 120" preserveAspectRatio="none"><path d="M0 60 C180 20 540 100 720 60 C900 20 1260 100 1440 60 L1440 120 L0 120Z"/></svg>
+  <svg class="wave w2" viewBox="0 0 1440 120" preserveAspectRatio="none"><path d="M0 70 C180 100 540 30 720 70 C900 100 1260 30 1440 70 L1440 120 L0 120Z"/></svg>
+</div>
+
+<!-- ด่านเข้าระบบ: คีย์ + Discord -->
+<div id="gate" class="gate" data-state="loading" hidden>
+  <div class="gate-card glass">
+    <div class="cover"><img src="assets/furina.jpg" alt="Furina"><div class="cover-fade"></div></div>
+    <h1>Fontaine AI</h1>
+    <p class="sub">โรงละครแห่งฟองแตน · เข้าได้เฉพาะผู้ได้รับเชิญ</p>
+
+    <div class="g-pane" data-for="loading"><div class="typing"><i></i><i></i><i></i></div></div>
+
+    <div class="g-pane" data-for="login">
+      <label>① คีย์เข้าใช้งาน <small>(ใส่แค่ครั้งแรก — เคยเข้าแล้วเว้นว่างได้)</small>
+        <input id="gKey" type="password" placeholder="ใส่คีย์" autocomplete="off">
+      </label>
+      <button id="gDiscord" class="btn discord">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.2.5a18 18 0 0 0-6.4 0L8.6 3A19.8 19.8 0 0 0 3.7 4.4C.6 9 -.2 13.5.2 18a20 20 0 0 0 6 3l.8-1.3a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l.8 1.3a20 20 0 0 0 6-3c.5-5.2-.8-9.700-3.700-13.600ZM8.500 15.300c-1.200 0-2.100-1.100-2.100-2.400 0-1.300.9-2.400 2.100-2.400 1.200 0 2.100 1.100 2.100 2.400 0 1.300-.9 2.400-2.100 2.400Zm7 0c-1.200 0-2.100-1.100-2.100-2.400 0-1.300.9-2.400 2.100-2.400 1.200 0 2.100 1.100 2.100 2.400 0 1.300-.9 2.400-2.100 2.400Z"/></svg>
+        ② เข้าสู่ระบบด้วย Discord
+      </button>
+    </div>
+
+    <div class="g-pane" data-for="needkey">
+      <p class="who">สวัสดี <b id="gWho"></b> ✨<br><small>บัญชีนี้ยังไม่ได้เปิดใช้งาน — ใส่คีย์เพื่อเข้าโรงละคร</small></p>
+      <label>คีย์เข้าใช้งาน
+        <input id="gKey2" type="password" placeholder="ใส่คีย์" autocomplete="off">
+      </label>
+      <button id="gRedeem" class="btn primary">ยืนยันคีย์</button>
+      <button id="gSignOut" class="btn ghost">ออกจากระบบ</button>
+    </div>
+
+    <div class="g-pane" data-for="error">
+      <button id="gRetry" class="btn primary">ลองใหม่</button>
+    </div>
+
+    <p id="gMsg" class="gmsg"></p>
+  </div>
+</div>
+
+<!-- Drawer: ประวัติแชท -->
+<div id="scrim" class="scrim"></div>
+<aside id="drawer" class="drawer glass cloud-only" aria-label="ประวัติแชท">
+  <div class="dr-h"><b>ประวัติแชท</b><button class="btn icon sm" id="btnCloseDrawer">✕</button></div>
+  <button class="btn primary newchat" id="btnNewChat">＋ แชทใหม่</button>
+  <div id="convList" class="conv-list"></div>
+  <div class="dr-user">
+    <img id="uAv" alt="" hidden><span id="uName"></span>
+    <button class="btn ghost sm" id="btnSignOut">ออกจากระบบ</button>
+  </div>
+</aside>
+
+<div class="app">
+  <header class="top glass">
+    <div class="brand">
+      <button class="btn icon cloud-only" id="btnMenu" title="ประวัติแชท">☰</button>
+      <div class="orb"><img src="assets/furina-icon.jpg" alt=""></div>
+      <div class="brand-t">
+        <b id="pName">ฟูริน่า</b>
+        <small id="pTag">Furina · โหมดสนทนา</small>
+      </div>
+    </div>
+
+    <div class="seg" id="seg" role="tablist" aria-label="โหมด">
+      <span class="thumb"></span>
+      <button class="seg-b active" data-m="furina" role="tab">🎭 Furina</button>
+      <button class="seg-b" data-m="code" role="tab">⚡ Focalors Code</button>
+    </div>
+
+    <div class="tools">
+      <button class="btn icon" id="btnSkills" title="สกิล">✨<i class="badge" id="skillCount" hidden>0</i></button>
+      <button class="btn icon" id="btnClear" title="ล้างแชท">🗑️</button>
+      <button class="btn icon" id="btnSettings" title="ตั้งค่า">⚙️</button>
+    </div>
+  </header>
+
+  <main id="chat" class="chat" aria-live="polite"></main>
+
+  <footer class="composer glass">
+    <div id="quick" class="quick" aria-label="ทางลัดโหมดโค้ด"></div>
+    <div id="chips" class="chips"></div>
+    <div class="row">
+      <input type="file" id="fileInput" multiple hidden accept="image/*,.pdf,.txt,.md,.json,.csv,.js,.ts,.jsx,.tsx,.py,.html,.css,.java,.c,.cpp,.cs,.go,.rs,.php,.rb,.sh,.sql,.yml,.yaml,.xml,.log,.ini,.toml">
+      <button class="btn icon" id="btnAttach" title="แนบรูป/ไฟล์">📎</button>
+      <button class="btn icon toggle" id="btnWeb" title="ค้นเว็บ (Google/เว็บ)" aria-pressed="false">🌐</button>
+      <button class="btn icon toggle code-only" id="btnTest" title="ทดสอบโค้ดอัตโนมัติก่อนส่ง" aria-pressed="true">🧪</button>
+      <textarea id="input" rows="1" placeholder="พิมพ์ข้อความ…"></textarea>
+      <button class="btn send" id="btnSend" title="ส่ง"><span class="send-i">➤</span><span class="stop-i">■</span></button>
+    </div>
+  </footer>
+</div>
+
+<!-- Settings -->
+<div class="modal-wrap" id="mSettings">
+  <div class="modal glass">
+    <div class="m-h"><h3>⚙️ ตั้งค่า API</h3><button class="btn icon sm close">✕</button></div>
+    <div class="m-b">
+      <label>แหล่ง API Key
+        <select id="fSource">
+          <option value="own">ใช้ API Key ของฉันเอง (เก็บในเครื่องนี้)</option>
+          <option value="proxy" class="cloud-only">ใช้ Key ของเซิร์ฟเวอร์ (ผ่าน ai-proxy)</option>
+        </select>
+      </label>
+      <label>ผู้ให้บริการ
+        <select id="fProvider"></select>
+      </label>
+      <label data-own>API Key <small>(เก็บในเบราว์เซอร์ของคุณเท่านั้น ไม่ขึ้นฐานข้อมูล)</small>
+        <input id="fKey" type="password" placeholder="sk-... / AIza... / sk-ant-..." autocomplete="off">
+      </label>
+      <label data-own>Base URL
+        <input id="fBase" type="text" placeholder="https://...">
+      </label>
+      <label>Model
+        <input id="fModel" type="text" placeholder="ชื่อโมเดล">
+      </label>
+      <label>Tavily API Key <small>(ไม่บังคับ — ใช้ค้นเว็บให้โมเดลที่ไม่มีระบบค้นในตัว)</small>
+        <input id="fTavily" type="password" placeholder="tvly-..." autocomplete="off">
+      </label>
+      <label>กฎ/คำสั่งเพิ่มเติม <small>(ตั้งเองได้ที่นี่ หรือใน config.js → CUSTOM_RULES)</small>
+        <textarea id="fRules" rows="4" placeholder="เช่น ตอบสั้นๆ, เรียกผู้ใช้ว่า ..."></textarea>
+      </label>
+    </div>
+    <div class="m-f">
+      <button class="btn ghost" id="sCancel">ปิด</button>
+      <button class="btn primary" id="sSave">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- Skills -->
+<div class="modal-wrap" id="mSkills">
+  <div class="modal glass">
+    <div class="m-h"><h3>✨ สกิลของ AI</h3><button class="btn icon sm close">✕</button></div>
+    <div class="m-b">
+      <p class="hint">สกิล = ชุดคำสั่ง/ความเชี่ยวชาญที่เปิด-ปิดได้ ระบบจะแนบสกิลที่เปิดอยู่ไปกับ system prompt ทุกครั้ง</p>
+      <div id="skillList" class="skill-list"></div>
+      <div class="skill-add">
+        <input id="skName" type="text" placeholder="ชื่อสกิล เช่น React Expert">
+        <textarea id="skBody" rows="4" placeholder="คำสั่ง/ความรู้ของสกิล เช่น 'ใช้ React 18 + TypeScript เสมอ แยก component เล็กๆ ...'"></textarea>
+        <button class="btn primary" id="skAdd">+ เพิ่มสกิล</button>
+      </div>
+    </div>
+    <div class="m-f">
+      <button class="btn ghost" id="skExport">ส่งออก</button>
+      <button class="btn ghost" id="skImport">นำเข้า</button>
+      <input type="file" id="skFile" accept=".json" hidden>
+      <button class="btn primary" id="skClose">เสร็จสิ้น</button>
+    </div>
+  </div>
+</div>
+
+<!-- Preview / รันสด -->
+<div class="modal-wrap" id="mPreview">
+  <div class="modal glass wide">
+    <div class="m-h"><h3 id="pvTitle">▶ ผลลัพธ์</h3><button class="btn icon sm close">✕</button></div>
+    <div class="m-b pv">
+      <iframe id="pvFrame" title="preview" hidden></iframe>
+      <div id="pvCon" class="pv-con"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="runner.js"></script>
+<script src="auth.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
