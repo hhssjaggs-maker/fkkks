@@ -8,6 +8,7 @@ const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const KEY = 'fontaine_ai_v2', OLD_KEY = 'fontaine_ai_v1';
 const ICON = 'furina-icon.jpg';
+const ic = (n, c = '') => `<svg class="i ${c}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
 
 /* ---------- state ---------- */
 const def = {
@@ -56,20 +57,77 @@ const raceAbort = (p, signal) => new Promise(res => {
   p.then(res, () => res(null));
 });
 
-/* ---------- format: *narration* เทา, code block พร้อมปุ่ม ---------- */
-function inlineFmt(p) {
+/* ---------- จัดรูปแบบข้อความ (Markdown + บรรยายสีเทา + ซ่อมโค้ดบล็อกที่พัง) ---------- */
+// โมเดลบางตัวส่ง ``` ติดกับข้อความ ไม่ขึ้นบรรทัดใหม่ → ซ่อมให้เปิด/ปิดโค้ดบล็อกอยู่ต้นบรรทัดเสมอ
+function fixFences(s) {
+  s = s || '';
+  if (s.indexOf('```') < 0) return s;
+  let out = '', last = 0, open = false, m; const re = /```/g;
+  while ((m = re.exec(s))) {
+    out += s.slice(last, m.index);
+    if (out && !out.endsWith('\n')) out += '\n';
+    out += '```';
+    const rest = s.slice(m.index + 3);
+    if (!open) {
+      const lang = rest.match(/^[\w+#.-]{0,15}/)[0];
+      out += lang; last = m.index + 3 + lang.length;
+      const nx = rest[lang.length];                     // ติดกับ ``` โดยไม่มีช่องว่าง = โมเดลลืมขึ้นบรรทัด
+      if (nx !== undefined && !/\s/.test(nx)) out += '\n';
+      open = true;
+    } else {
+      last = m.index + 3;
+      if (rest.length && rest[0] !== '\n') out += '\n';
+      open = false;
+    }
+  }
+  return out + s.slice(last);
+}
+// ตรวจว่าโมเดลส่งข้อความมาแบบไม่เว้นวรรค/ไม่ขึ้นบรรทัด (ตัวอักษรอังกฤษติดกัน)
+function looksSquashed(t) {
+  if (!t || t.length < 300) return false;
+  const glue = (t.match(/[a-z]{2,}[A-Z][a-z]+[A-Z][a-z]+/g) || []).length;
+  const ratio = (t.match(/[ \n]/g) || []).length / t.length;
+  return glue >= 2 || (!/\n/.test(t) && t.length > 500 && ratio < 0.012);
+}
+function inline(p, boldAct) {
   const keep = [];
   let h = esc(p).replace(/`([^`\n]+)`/g, (_, c) => { keep.push(`<code class="in">${c}</code>`); return `\u0000${keep.length - 1}\u0000`; });
-  h = h.replace(/\*\*([^*\n]+)\*\*|\*([^*\n]+)\*/g, (_, a, b) => `<span class="act">${a || b}</span>`);
-  h = h.replace(/\u0000(\d+)\u0000/g, (_, i) => keep[i]);
-  return h ? `<span class="txt">${h}</span>` : '';
+  h = h.replace(/\*\*([^*\n]+)\*\*/g, (_, a) => boldAct ? `<span class="act">${a}</span>` : `<strong>${a}</strong>`);
+  h = h.replace(/\*([^*\n]+)\*/g, (_, a) => `<span class="act">${a}</span>`);
+  return h.replace(/\u0000(\d+)\u0000/g, (_, i) => keep[i]);
+}
+function mdTable(rows, ba) {
+  const cells = r => r.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+  const isSep = r => /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?$/.test(r);
+  let head = null, body = rows;
+  if (rows.length > 1 && isSep(rows[1])) { head = cells(rows[0]); body = rows.slice(2); }
+  return `<div class="tbl"><table>${head ? `<thead><tr>${head.map(c => `<th>${inline(c, ba)}</th>`).join('')}</tr></thead>` : ''}<tbody>${
+    body.filter(r => !isSep(r)).map(r => `<tr>${cells(r).map(c => `<td>${inline(c, ba)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+function mdBlocks(src, ba) {
+  const lines = src.replace(/\r/g, '').split('\n'); let out = '', i = 0, para = [];
+  const flush = () => { if (para.length) { out += `<p>${para.map(l => inline(l, ba)).join('<br>')}</p>`; para = []; } };
+  const LI = /^\s*([-+*]|\d+[.)])\s+/;
+  while (i < lines.length) {
+    const ln = lines[i], t = ln.trim(); let m;
+    if (!t) { flush(); i++; continue; }
+    if ((m = t.match(/^(#{1,4})\s+(.*)$/))) { flush(); const n = Math.min(m[1].length + 1, 5); out += `<h${n} class="md-h">${inline(m[2], ba)}</h${n}>`; i++; continue; }
+    if (/^(-{3,}|_{3,})$/.test(t)) { flush(); out += '<hr>'; i++; continue; }
+    if (/^>\s?/.test(t)) { flush(); const q = []; while (i < lines.length && /^\s*>\s?/.test(lines[i])) { q.push(lines[i].replace(/^\s*>\s?/, '')); i++; } out += `<blockquote>${q.map(l => inline(l, ba)).join('<br>')}</blockquote>`; continue; }
+    if (/^\|.*\|$/.test(t)) { flush(); const rows = []; while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) { rows.push(lines[i].trim()); i++; } out += mdTable(rows, ba); continue; }
+    if (LI.test(ln)) { flush(); const ord = /^\s*\d+[.)]/.test(ln), items = []; while (i < lines.length && LI.test(lines[i])) { items.push(lines[i].replace(LI, '')); i++; } out += `<${ord ? 'ol' : 'ul'}>${items.map(x => `<li>${inline(x, ba)}</li>`).join('')}</${ord ? 'ol' : 'ul'}>`; continue; }
+    para.push(ln); i++;
+  }
+  flush(); return out;
 }
 function codeBox(lang, name, code, btns) {
   return `<div class="code"><div class="code-h"><span>${esc(lang)}${name ? ' · ' + esc(name) : ''}</span><span class="code-b">${btns}</span></div><pre><code>${esc(code)}</code></pre></div>`;
 }
 function fmt(src, m) {
+  src = fixFences(src);
+  const ba = !(m && m.mode === 'code');           // โหมดโค้ด: ** = ตัวหนา, โหมดสนทนา: ** = คำบรรยายสีเทา
   const blocks = Runner.extract(src), names = Runner.fileNames(blocks);
-  let runnable = new Set();
+  const runnable = new Set();
   if (m && m.done && m.mode === 'code' && m.role === 'assistant') {
     Runner.plan(blocks).forEach(t => { if (t.kind === 'html' || t.kind === 'js' || t.kind === 'py') t.blocks.forEach(b => runnable.add(b.idx)); });
   }
@@ -79,15 +137,15 @@ function fmt(src, m) {
     if (i % 2 === 1) {
       const idx = k++, b = blocks[idx];
       if (!b) return '';
-      let btns = '<button data-copy>คัดลอก</button>';
-      if (runnable.has(idx)) btns = `<button data-run="${idx}">▶ รัน</button>` + btns;
-      if (showDl) btns += `<button data-dl="${idx}">⬇</button>`;
-      return codeBox(b.lang, names[idx], b.code, btns);
+      let btns = `<button data-copy title="คัดลอกโค้ด">${ic('copy')}</button>`;
+      if (runnable.has(idx)) btns = `<button data-run="${idx}">${ic('play')}<span>รัน</span></button>` + btns;
+      if (showDl) btns += `<button data-dl="${idx}" title="ดาวน์โหลดไฟล์">${ic('download')}</button>`;
+      return codeBox(b.lang, (b.name || b.lang !== 'text') ? names[idx] : '', b.code, btns);
     }
     const o = tok.indexOf('```');
-    if (o < 0) return inlineFmt(tok);
-    const open = tok.slice(o).match(/^```([^\n`]*)\n?([\s\S]*)$/);   // โค้ดที่กำลังสตรีมอยู่ (ยังไม่ปิด)
-    return inlineFmt(tok.slice(0, o)) + (open ? codeBox((open[1] || 'code').trim() || 'code', '', open[2], '') : '');
+    if (o < 0) return mdBlocks(tok, ba);
+    const open = tok.slice(o).match(/^```([^\n`]*)\n?([\s\S]*)$/);   // โค้ดที่กำลังสตรีม (ยังไม่ปิด)
+    return mdBlocks(tok.slice(0, o), ba) + (open ? codeBox((open[1] || 'code').trim() || 'code', '', open[2], '') : '');
   }).join('');
 }
 
@@ -101,7 +159,7 @@ function avatarEl(m) {
   const av = document.createElement('div'); av.className = 'av';
   if (m.role === 'user') {
     const u = Auth.profile?.avatar_url;
-    if (u) { const i = document.createElement('img'); i.src = u; i.alt = ''; i.referrerPolicy = 'no-referrer'; av.append(i); } else av.textContent = '🙂';
+    if (u) { const i = document.createElement('img'); i.src = u; i.alt = ''; i.referrerPolicy = 'no-referrer'; av.append(i); } else av.innerHTML = ic('user');
   } else { av.classList.toggle('code', m.mode === 'code'); const i = document.createElement('img'); i.src = ICON; i.alt = ''; av.append(i); }
   return av;
 }
@@ -144,13 +202,18 @@ function paint(m) {
   if (m.error) h += `<div class="err">${esc(m.error)}</div>`;
   if (m.status) h += `<div class="status"><span class="spin"></span><span>${esc(m.status)}</span></div>`;
   if (m.report) h += reportHTML(m.report, m.fix);
+  if (m.done && m.role === 'assistant' && !m.draft && looksSquashed(m.text)) {
+    h += `<div class="note">${ic('info')}<span>โมเดลตัวนี้ส่งข้อความมาแบบแทบไม่เว้นวรรค/ไม่ขึ้นบรรทัด ทำให้ตัวอักษรติดกัน (เป็นที่ตัวโมเดลหรือผู้ให้บริการ ไม่ใช่หน้าเว็บ) — ลองเปลี่ยนโมเดลใน ตั้งค่า แล้วกดสร้างใหม่</span></div>`;
+  }
   if (m.done && m.role === 'assistant' && m.mode === 'code' && !m.draft && m.text) {
-    const blocks = Runner.extract(m.text), tasks = Runner.plan(blocks);
-    const hasHtml = tasks.some(t => t.kind === 'html');
+    const blocks = Runner.extract(fixFences(m.text)), tasks = Runner.plan(blocks);
     let t = '';
-    if (hasHtml) t += '<button data-runweb>🌐 เปิดดูเว็บ</button>';
-    if (blocks.length >= 2) t += '<button data-zip>📦 ดาวน์โหลดทั้งหมด (.zip)</button>';
+    if (tasks.some(x => x.kind === 'html')) t += `<button data-runweb>${ic('globe')}<span>เปิดดูเว็บ</span></button>`;
+    if (blocks.length >= 2) t += `<button data-zip>${ic('box')}<span>ดาวน์โหลดทั้งหมด (.zip)</span></button>`;
     if (t) h += `<div class="msg-tools">${t}</div>`;
+  }
+  if (!m.greet && m.text && (m.done || m.role === 'user') && !m.status) {
+    h += `<div class="bar"><button data-cp title="คัดลอกข้อความ">${ic('copy')}</button>${m.role === 'assistant' ? `<button data-regen title="สร้างคำตอบใหม่">${ic('refresh')}</button>` : ''}</div>`;
   }
   m.el.innerHTML = h;
 }
@@ -164,9 +227,9 @@ function greeting() {
 }
 function renderAll() {
   chat.innerHTML = '';
-  addMsg({ role: 'assistant', text: greeting(), mode: S.mode, done: true }, false);
+  addMsg({ role: 'assistant', text: greeting(), mode: S.mode, done: true, greet: true }, false);
   cur.messages.forEach(m => addMsg(m, false));
-  scrollDown(true);
+  scrollDown(true); markLast();
 }
 
 /* ---------- ฐานข้อมูล (Supabase) ---------- */
@@ -202,7 +265,7 @@ function renderConvs() {
   if (!convs.length) { box.innerHTML = '<p class="hint pad">ยังไม่มีประวัติแชท</p>'; return; }
   convs.forEach(c => {
     const d = document.createElement('div'); d.className = 'conv' + (c.id === cur.id ? ' active' : '');
-    d.innerHTML = `<button class="conv-t"><b>${c.mode === 'code' ? '⚡' : '🎭'} ${esc(c.title)}</b><small>${relTime(c.updated_at)}</small></button><button class="conv-x" title="ลบ">🗑️</button>`;
+    d.innerHTML = `<button class="conv-t"><b>${ic(c.mode === 'code' ? 'code' : 'crown')}<span>${esc(c.title)}</span></b><small>${relTime(c.updated_at)}</small></button><button class="conv-x" title="ลบ">${ic('trash')}</button>`;
     d.querySelector('.conv-t').onclick = () => { openConv(c.id); closeDrawer(); };
     d.querySelector('.conv-x').onclick = async () => {
       if (!confirm(`ลบแชท "${c.title}" ?`)) return;
@@ -266,30 +329,48 @@ function applyMode() {
   document.body.dataset.mode = S.mode;
   $$('.seg-b').forEach(b => b.classList.toggle('active', b.dataset.m === S.mode));
   $('#pName').textContent = persona().name; $('#pTag').textContent = persona().tag;
-  $('#input').placeholder = S.mode === 'code' ? 'บอกสิ่งที่ต้องการสร้าง…' : 'พิมพ์ข้อความ…';
+  $('#input').placeholder = S.mode === 'code' ? 'สั่งงานโค้ด…' : 'พิมพ์ข้อความ…';
   document.querySelector('meta[name=theme-color]').content = S.mode === 'code' ? '#0a3447' : '#c8d8e1';
+  renderQuick();
 }
 $$('.seg-b').forEach(b => b.onclick = () => setMode(b.dataset.m));
 
-/* ---------- ทางลัดโหมดโค้ด ---------- */
-const QUICK = [
-  ['🐞 หาบั๊ก', 'ช่วยหาบั๊กในโค้ดนี้ อธิบายสาเหตุ และส่งโค้ดที่แก้แล้วฉบับเต็ม:\n'],
-  ['🧪 เขียนเทสต์', 'เขียน unit test ครอบคลุมกรณีปกติ กรณีขอบ และกรณี error ให้โค้ดนี้ (ให้รันได้เองและพิมพ์ผลผ่าน/ไม่ผ่าน):\n'],
-  ['♻️ Refactor', 'Refactor โค้ดนี้ให้อ่านง่าย แยกหน้าที่ชัดเจน โดยพฤติกรรมเดิมไม่เปลี่ยน:\n'],
-  ['🚀 เพิ่มความเร็ว', 'วิเคราะห์คอขวดด้านประสิทธิภาพของโค้ดนี้ และปรับปรุงพร้อมอธิบายว่าดีขึ้นเพราะอะไร:\n'],
-  ['🔒 ตรวจความปลอดภัย', 'ตรวจโค้ดนี้หาช่องโหว่ด้านความปลอดภัย (XSS, injection, auth, secrets ฯลฯ) จัดลำดับความรุนแรง และแก้ให้:\n'],
-  ['📖 อธิบายโค้ด', 'อธิบายโค้ดนี้ทีละส่วนให้เข้าใจง่าย พร้อมแผนภาพลำดับการทำงานแบบข้อความ:\n'],
-  ['🧱 ออกแบบระบบ', 'ช่วยออกแบบสถาปัตยกรรมและโครงสร้างโฟลเดอร์สำหรับ: '],
-  ['🗄️ ออกแบบฐานข้อมูล', 'ออกแบบ schema ฐานข้อมูล (พร้อม index, ความสัมพันธ์, และ SQL สร้างตาราง) สำหรับ: '],
-  ['🔁 แปลงภาษา', 'แปลงโค้ดนี้เป็นภาษา/เฟรมเวิร์ก ____ โดยรักษาพฤติกรรมเดิม:\n'],
-  ['📝 เขียน README', 'เขียน README.md ที่ดีให้โปรเจกต์นี้ (ติดตั้ง, วิธีใช้, ตัวอย่าง, โครงสร้าง):\n']
-];
-$('#quick').innerHTML = QUICK.map((q, i) => `<button data-q="${i}">${q[0]}</button>`).join('');
+/* ---------- ทางลัด (เปลี่ยนตามโหมด) + ศาลฟองแตน ---------- */
+const COURT_CHAT = 'เปิดศาลฟองแตน — ไต่สวนเรื่องนี้อย่างเป็นขั้นตอน:\n1) ข้อเท็จจริงและทางเลือกที่มี\n2) อัยการ: เหตุผลที่ควรระวัง/คัดค้าน และความเสี่ยง\n3) ทนาย: เหตุผลที่ควรเลือก และข้อดี\n4) คำพิพากษา: สรุปชัดเจนว่าควรทำอะไร พร้อมเหตุผล ขั้นตอนถัดไป และสิ่งที่ยังไม่แน่ใจ\nเรื่องที่ต้องตัดสิน: ';
+const COURT_CODE = 'เปิดศาลตรวจโค้ด:\n1) อัยการ: ข้อบกพร่องและความเสี่ยง จัดลำดับความรุนแรง (สูง/กลาง/ต่ำ) ระบุส่วนของโค้ดที่เกี่ยวข้อง\n2) ทนาย: จุดแข็งและเหตุผลที่ออกแบบแบบนี้\n3) คำพิพากษา: สิ่งที่ต้องแก้ก่อน สิ่งที่ปล่อยได้ พร้อมโค้ดฉบับแก้ไข\nโค้ดที่ต้องพิจารณา:\n';
+const QUICK = {
+  furina: [
+    ['scale', 'ศาลตัดสินใจ', COURT_CHAT],
+    ['bulb', 'ระดมไอเดีย', 'ช่วยระดมไอเดียหลายแนวทาง (แนวปลอดภัย / แนวแหวกแนว / ทำได้ทันที) พร้อมข้อดีข้อเสียสั้นๆ และบอกว่าควรเริ่มอันไหนก่อน สำหรับเรื่อง: '],
+    ['list', 'สรุปให้เข้าใจง่าย', 'สรุปเนื้อหาต่อไปนี้เป็นหัวข้อสั้นๆ พร้อมประเด็นสำคัญและสิ่งที่ควรทำต่อ:\n'],
+    ['pen', 'ช่วยเรียบเรียง', 'ช่วยเรียบเรียงข้อความนี้ให้ลื่นไหลและเป็นธรรมชาติ โดยคงความหมายเดิม:\n'],
+    ['lang', 'แปลภาษา', 'แปลข้อความนี้เป็นภาษา ____ ให้เป็นธรรมชาติ และอธิบายคำที่แปลยากสั้นๆ:\n']
+  ],
+  code: [
+    ['scale', 'ศาลตรวจโค้ด', COURT_CODE],
+    ['bug', 'หาบั๊ก', 'ช่วยหาบั๊กในโค้ดนี้ อธิบายสาเหตุ และส่งโค้ดที่แก้แล้วฉบับเต็ม:\n'],
+    ['checksq', 'เขียนเทสต์', 'เขียน unit test ครอบคลุมกรณีปกติ กรณีขอบ และกรณี error ให้โค้ดนี้ (ให้รันได้เองและพิมพ์ผลผ่าน/ไม่ผ่าน):\n'],
+    ['repeat', 'Refactor', 'Refactor โค้ดนี้ให้อ่านง่าย แยกหน้าที่ชัดเจน โดยพฤติกรรมเดิมไม่เปลี่ยน:\n'],
+    ['bolt', 'เพิ่มความเร็ว', 'วิเคราะห์คอขวดด้านประสิทธิภาพของโค้ดนี้ และปรับปรุงพร้อมอธิบายว่าดีขึ้นเพราะอะไร:\n'],
+    ['shield', 'ตรวจความปลอดภัย', 'ตรวจโค้ดนี้หาช่องโหว่ด้านความปลอดภัย (XSS, injection, auth, secrets ฯลฯ) จัดลำดับความรุนแรง และแก้ให้:\n'],
+    ['eye', 'อธิบายโค้ด', 'อธิบายโค้ดนี้ทีละส่วนให้เข้าใจง่าย พร้อมแผนภาพลำดับการทำงานแบบข้อความ:\n'],
+    ['layout', 'ออกแบบระบบ', 'ช่วยออกแบบสถาปัตยกรรมและโครงสร้างโฟลเดอร์สำหรับ: '],
+    ['db', 'ออกแบบฐานข้อมูล', 'ออกแบบ schema ฐานข้อมูล (พร้อม index, ความสัมพันธ์, และ SQL สร้างตาราง) สำหรับ: '],
+    ['lang', 'แปลงภาษา', 'แปลงโค้ดนี้เป็นภาษา/เฟรมเวิร์ก ____ โดยรักษาพฤติกรรมเดิม:\n'],
+    ['doc', 'เขียน README', 'เขียน README.md ที่ดีให้โปรเจกต์นี้ (ติดตั้ง, วิธีใช้, ตัวอย่าง, โครงสร้าง):\n']
+  ]
+};
+const qKey = () => S.mode === 'code' ? 'code' : 'furina';
+function renderQuick() {
+  const q = $('#quick');
+  q.innerHTML = QUICK[qKey()].map((x, i) => `<button data-q="${i}">${ic(x[0])}<span>${x[1]}</span></button>`).join('');
+  q.scrollLeft = 0;
+}
 $('#quick').addEventListener('click', e => {
   const b = e.target.closest('[data-q]'); if (!b) return;
-  const tpl = QUICK[+b.dataset.q][1], ex = input.value.trim();
-  input.value = tpl + (ex ? '\n' + ex : ''); autosize(); input.focus();
-  if (!ex) input.setSelectionRange(input.value.length, input.value.length);
+  const tpl = QUICK[qKey()][+b.dataset.q][2], ex = input.value.trim();
+  input.value = tpl + ex; autosize(); input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
 });
 $('#btnTest').onclick = () => { S.autotest = !S.autotest; syncTest(); save(); toast(S.autotest ? '🧪 เปิดทดสอบโค้ดอัตโนมัติ' : 'ปิดทดสอบโค้ดอัตโนมัติ'); };
 function syncTest() { $('#btnTest').setAttribute('aria-pressed', S.autotest); }
@@ -297,6 +378,7 @@ function syncTest() { $('#btnTest').setAttribute('aria-pressed', S.autotest); }
 /* ---------- system prompt ---------- */
 function systemPrompt(mode) {
   const parts = [persona(mode).prompt];
+  if (CFG.FORMAT_PROMPT) parts.push(CFG.FORMAT_PROMPT);
   if (mode === 'code') { parts.push(CFG.CODE_TOOLS_PROMPT); if (S.autotest) parts.push(CFG.AUTOTEST_PROMPT); }
   const rules = [CFG.CUSTOM_RULES, S.rules].map(x => (x || '').trim()).filter(Boolean).join('\n');
   if (rules) parts.push('## กฎเพิ่มเติมจากผู้ใช้\n' + rules);
@@ -504,7 +586,11 @@ async function send() {
   const um = { role: 'user', text, files, fileNames: files.map(f => f.name), mode, done: true };
   cur.messages.push(um); addMsg(um);
   input.value = ''; autosize(); scrollDown(true);
+  await runTurn(um, mode);
+}
 
+async function runTurn(um, mode) {
+  const text = um.text, files = um.files || [];
   busy = true; btnSend.classList.add('busy'); abortCtl = new AbortController();
   const signal = abortCtl.signal;
   const dbReady = (async () => { await ensureConv(text || files[0]?.name); await persist(um); })();
@@ -525,6 +611,7 @@ async function send() {
         if (e.name === 'AbortError') { if (!am.text) am.text = '*หยุดการตอบแล้ว*'; }
         else am.error = '⚠️ ' + (e.message || e) + (/Failed to fetch/i.test(e.message) ? ' (เช็กอินเทอร์เน็ต / Base URL / CORS ของผู้ให้บริการ)' : '');
       }
+      am.text = fixFences(am.text);
       let again = false;
       if (testing && !am.error && !signal.aborted && am.text) {
         const hasCode = Runner.plan(Runner.extract(am.text)).length > 0;
@@ -552,20 +639,54 @@ async function send() {
     toast('เกิดข้อผิดพลาด: ' + (e.message || e));
   } finally {
     busy = false; btnSend.classList.remove('busy'); abortCtl = null;
-    delete um.ctx; save();
+    delete um.ctx; save(); markLast();
     if (Auth.cloud) renderConvs();
   }
 }
 
-/* ---------- ปุ่มในแชต: คัดลอก / รัน / ดาวน์โหลด / ZIP ---------- */
-chat.addEventListener('click', e => {
-  const t = e.target.closest('[data-copy],[data-run],[data-dl],[data-zip],[data-runweb]'); if (!t) return;
-  if (t.hasAttribute('data-copy')) {
-    navigator.clipboard.writeText(t.closest('.code').querySelector('code').textContent).then(() => { t.textContent = 'คัดลอกแล้ว ✓'; setTimeout(() => t.textContent = 'คัดลอก', 1400); });
-    return;
+/* ---------- ปุ่มในแชต: คัดลอก / สร้างใหม่ / รัน / ดาวน์โหลด / ZIP ---------- */
+async function copyText(text, btn) {
+  try { await navigator.clipboard.writeText(text); }
+  catch {
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;opacity:0;left:-9999px';
+    document.body.append(ta); ta.select(); try { document.execCommand('copy'); } catch {} ta.remove();
   }
+  if (btn) { const o = btn.innerHTML; btn.innerHTML = ic('check'); btn.classList.add('done'); toast('คัดลอกแล้ว'); setTimeout(() => { btn.innerHTML = o; btn.classList.remove('done'); }, 1300); }
+}
+function markLast() {
+  $$('.msg.last').forEach(r => r.classList.remove('last'));
+  const rows = $$('.msg.assistant');
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const m = rowMap.get(rows[i]);
+    if (m && !m.greet && m.done && !m.draft && m.text) { rows[i].classList.add('last'); break; }
+  }
+}
+async function regen() {
+  if (busy) return;
+  let idx = -1;
+  for (let i = cur.messages.length - 1; i >= 0; i--) { const m = cur.messages[i]; if (m.role === 'user' && !m.hidden && !m.notice) { idx = i; break; } }
+  if (idx < 0) return;
+  const um = cur.messages[idx], drop = cur.messages.splice(idx + 1);
+  const ids = drop.filter(m => m.id).map(m => m.id);
+  if (Auth.cloud && ids.length) sb().from('messages').delete().in('id', ids).then(() => {}, dbWarn);
+  renderAll();
+  await runTurn(um, S.mode);
+}
+function exportChat() {
+  const L = [`# ${cur.title}`, `_ส่งออกจาก Fontaine AI · ${new Date().toLocaleString('th-TH')}_`, ''];
+  const n0 = L.length;
+  cur.messages.filter(m => !m.notice && !m.hidden && !m.draft && m.text).forEach(m => L.push(`## ${m.role === 'user' ? 'ผู้ใช้' : persona(m.mode).name}`, '', fixFences(m.text), ''));
+  if (L.length === n0) return toast('ยังไม่มีข้อความให้ส่งออก');
+  Runner.download('fontaine-chat.md', L.join('\n'));
+}
+$('#btnExport').onclick = exportChat;
+chat.addEventListener('click', e => {
+  const t = e.target.closest('[data-copy],[data-cp],[data-regen],[data-run],[data-dl],[data-zip],[data-runweb]'); if (!t) return;
+  if (t.hasAttribute('data-copy')) { copyText(t.closest('.code').querySelector('code').textContent, t); return; }
   const m = rowMap.get(t.closest('.msg')); if (!m) return;
-  const blocks = Runner.extract(m.text), names = Runner.fileNames(blocks);
+  if (t.hasAttribute('data-cp')) { copyText(m.text || '', t); return; }
+  if (t.hasAttribute('data-regen')) { regen(); return; }
+  const blocks = Runner.extract(fixFences(m.text)), names = Runner.fileNames(blocks);
   if (t.hasAttribute('data-dl')) { const i = +t.dataset.dl; Runner.download(names[i], blocks[i].code); }
   else if (t.hasAttribute('data-zip')) Runner.download('fontaine-code.zip', Runner.zip(blocks.map((b, i) => ({ name: names[i], data: b.code }))));
   else if (t.hasAttribute('data-run')) { const task = Runner.taskForBlock(blocks[+t.dataset.run], blocks); if (task) openPreview(task); }
@@ -615,7 +736,7 @@ function renderSkills() {
   S.skills.forEach((s, i) => {
     const d = document.createElement('div'); d.className = 'skill';
     d.innerHTML = `<div class="si"><b>${esc(s.name)}</b><small>${esc(s.body.slice(0, 80))}</small></div>
-      <label class="sw"><input type="checkbox" ${s.on ? 'checked' : ''}><span></span></label><button class="del" title="ลบ">🗑️</button>`;
+      <label class="sw"><input type="checkbox" ${s.on ? 'checked' : ''}><span></span></label><button class="del" title="ลบ">${ic('trash')}</button>`;
     d.querySelector('input').onchange = e => { s.on = e.target.checked; save(); pushSettings(); updSkillBadge(); };
     d.querySelector('.del').onclick = () => { S.skills.splice(i, 1); save(); pushSettings(); renderSkills(); updSkillBadge(); };
     box.append(d);

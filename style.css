@@ -187,9 +187,8 @@ textarea::placeholder,input::placeholder{color:var(--muted);opacity:.8}
 .chip button:hover{opacity:1;transform:scale(1.25)}
 
 /* quick actions (โหมดโค้ด) */
-.quick{display:none;gap:8px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none}
+.quick{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none}
 .quick::-webkit-scrollbar{display:none}
-body[data-mode="code"] .quick{display:flex}
 .quick button{flex:none;border:1px solid var(--glass-b);background:var(--accent-soft);border-radius:999px;padding:6px 14px;font-size:13px;cursor:pointer;white-space:nowrap;
   transition:transform .35s var(--spring),background .25s}
 .quick button:hover{transform:translateY(-2px);background:var(--accent)}
@@ -291,10 +290,68 @@ body[data-mode="code"] .toast{background:#0195D5;color:#fff}
 
 @media (max-width:640px){
   .app{padding:8px;gap:8px}.msg{max-width:100%}
-  .seg-b{padding:7px 11px;font-size:12.5px}
   .brand-t small{display:none}
   .cover{height:180px}
+  .top{gap:8px;padding:8px 10px}
+  .brand{gap:8px}.brand-t b{font-size:15px}
+  .tools{order:2;margin-left:auto;gap:6px}
+  .tools .btn.icon,.brand .btn.icon{width:38px;height:38px}
+  .orb{width:38px;height:38px}
+  .seg{order:3;flex:1 1 100%}
+  .seg-b{padding:7px 8px;font-size:13px}
 }
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
+
+/* ===== ไอคอนเส้น (สไตล์ Onyx) ===== */
+.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none;pointer-events:none;vertical-align:middle}
+.btn.icon .i{width:20px;height:20px}
+.btn.icon.sm .i{width:16px;height:16px}
+.btn.send .i{width:21px;height:21px}
+.seg{display:grid;grid-template-columns:1fr 1fr}
+.seg-b{display:inline-flex;align-items:center;justify-content:center;gap:6px}.seg-b .i{width:16px;height:16px}
+.btn.newchat,.btn.ghost.sm{display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn.newchat .i,.btn.ghost.sm .i{width:17px;height:17px}
+.m-h h3{display:flex;align-items:center;gap:8px}.m-h h3 .i{width:20px;height:20px}
+.code-h button{display:inline-flex;align-items:center;gap:5px}.code-h button .i{width:14px;height:14px}
+.code-h button.done{color:#9df3d8}
+.quick button{display:inline-flex;align-items:center;gap:7px}.quick .i{width:16px;height:16px}
+.msg-tools button{display:inline-flex;align-items:center;gap:6px}.msg-tools .i{width:15px;height:15px}
+.av .i{width:19px;height:19px;color:#fff}
+.conv-t b{display:flex;align-items:center;gap:7px;min-width:0}
+.conv-t b span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.conv-t b .i{width:15px;height:15px}
+.conv-x .i,.skill .del .i{width:17px;height:17px}
+
+/* ===== ข้อความแบบ Markdown ===== */
+.bubble p{margin:0 0 .7em}.bubble>p:last-child,.t>p:last-child{margin-bottom:0}
+.bubble ul,.bubble ol{margin:.3em 0 .75em;padding-left:1.4em}.bubble li{margin:.18em 0;padding-left:.15em}
+.bubble li::marker{color:var(--accent)}
+.md-h{margin:1em 0 .4em;line-height:1.4;font-weight:600}
+h2.md-h{font-size:1.16em}h3.md-h{font-size:1.08em}h4.md-h,h5.md-h{font-size:1em}
+.md-h:first-child{margin-top:0}
+.bubble hr{border:0;border-top:1px dashed var(--glass-b);margin:.9em 0}
+.bubble blockquote{margin:.55em 0;padding:.25em .9em;border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 12px 12px 0}
+.bubble strong{font-weight:600}
+.tbl{overflow-x:auto;margin:.6em 0;border-radius:12px;border:1px solid var(--glass-b)}
+.tbl table{border-collapse:collapse;font-size:13.5px;min-width:100%}
+.tbl th,.tbl td{border-bottom:1px solid var(--glass-b);padding:7px 11px;text-align:left;vertical-align:top}
+.tbl th{background:var(--accent-soft);font-weight:600;white-space:nowrap}
+.tbl tr:last-child td{border-bottom:0}
+
+/* ===== แถบปุ่มใต้ข้อความ (คัดลอก / สร้างใหม่) ===== */
+.bar{display:flex;gap:2px;margin:4px -8px -9px;opacity:.6;transition:opacity .25s}
+.msg:hover .bar,.bar:focus-within{opacity:1}
+.bar button{width:30px;height:30px;border:0;border-radius:50%;background:transparent;color:inherit;cursor:pointer;display:grid;place-items:center;
+  transition:transform .35s var(--spring),background .25s,color .25s}
+.bar button .i{width:16px;height:16px}
+.bar button:hover{background:var(--accent-soft);transform:translateY(-2px)}
+.bar button:active{transform:scale(.86);transition-duration:.1s}
+.bar button.done{color:var(--ok)}
+.msg:not(.last) .bar [data-regen]{display:none}
+.msg.user .bar{justify-content:flex-end}
+.note{display:flex;gap:8px;align-items:flex-start;margin-top:10px;padding:9px 12px;border-radius:12px;background:rgba(217,154,29,.15);color:var(--warn);font-size:13px;line-height:1.55}
+.note .i{width:17px;height:17px;margin-top:2px}
+
+.msg.user .bar{margin-top:2px}
