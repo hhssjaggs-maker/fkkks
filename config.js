@@ -9,8 +9,8 @@ window.AI_CONFIG = {
      (anon key เป็นกุญแจสาธารณะ ใส่ในเว็บได้ ความปลอดภัยอยู่ที่ RLS ใน schema.sql)
      ปล่อยว่าง = ไม่ใช้ฐานข้อมูล/ล็อกอิน (เก็บแชตในเครื่องเท่านั้น)
      ---------------------------------------------------------- */
-  SUPABASE_URL: "",       // เช่น "https://xxxxxxxx.supabase.co"
-  SUPABASE_ANON_KEY: "",  // เช่น "eyJhbGciOi..."
+  SUPABASE_URL: "https://yyhkuqcruuugcffrvyqt.supabase.co",       // เช่น "https://xxxxxxxx.supabase.co"
+  SUPABASE_ANON_KEY: "sb_publishable_RNueREVBTORASeEeyPtjlQ_AXXxEAhZ",  // เช่น "eyJhbGciOi..."
   ALLOW_GUEST: false,     // true = มีปุ่ม "เข้าแบบผู้เยี่ยมเยือน" (ไม่ล็อกอิน เก็บแชตในเครื่องเท่านั้น)
 
   /* ----------------------------------------------------------
