@@ -8,7 +8,7 @@ const CFG = window.AI_CONFIG, $ = s => document.querySelector(s);
 const enabled = !!(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY);
 const api = { enabled, cloud: false, sb: null, user: null, profile: null, guest: false };
 const GUEST = 'fa_guest';
-const VER = 'auth v3';
+const VER = 'auth v4';
 let log = []; try { log = JSON.parse(sessionStorage.getItem('fa_auth_log') || '[]'); } catch {}
 function note(t) {
   const d = new Date(), p = n => String(n).padStart(2, '0');
@@ -39,7 +39,7 @@ function fail(e) {
 async function check() {
   try {
     const { data: { session } } = await api.sb.auth.getSession();
-    if (!session) return state('login');
+    if (!session) return state('login', api._why ? 'ล็อกอินไม่สำเร็จ: ' + api._why : '', !!api._why);
     api.user = session.user; state('loading', 'กำลังตรวจสอบสิทธิ์…');
     const { data: ok, error } = await api.sb.rpc('touch_profile');
     if (error) throw error;
@@ -81,7 +81,7 @@ api.start = async function () {
   bind();
   if (!window.supabase) { state('error', 'โหลดไลบรารี Supabase ไม่สำเร็จ (เช็กอินเทอร์เน็ต)', true); return new Promise(() => {}); }
   api.sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' }
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, flowType: 'pkce' }
   });
   api.cloud = true;
   state('loading', 'กำลังเตรียมโรงละคร…');
@@ -94,6 +94,20 @@ api.start = async function () {
       if (!session) state('error', 'ระบบถูกออกจากระบบเอง (SIGNED_OUT) · เหตุการณ์: ' + log.join(' › ') + ' — กด "ลองใหม่" แล้วล็อกอินอีกครั้ง; ถ้ายังซ้ำ แคปหน้านี้ส่งให้ผู้ช่วย', true);
     }, 600);
   });
+  // แลก ?code= ด้วยตัวเอง (จะได้เห็นข้อความผิดพลาดจริง ถ้าแลกไม่สำเร็จ)
+  const u = new URL(location.href), hp = new URLSearchParams(location.hash.replace(/^#/, ''));
+  const code = u.searchParams.get('code');
+  const urlErr = u.searchParams.get('error_description') || hp.get('error_description') || u.searchParams.get('error') || hp.get('error');
+  if (code || urlErr || location.hash.includes('access_token')) history.replaceState({}, '', u.origin + u.pathname);
+  let why = urlErr ? decodeURIComponent(String(urlErr).replace(/\+/g, ' ')) : '';
+  if (code) {
+    note('exchange…');
+    try {
+      const { error } = await api.sb.auth.exchangeCodeForSession(code);
+      if (error) { why = error.message; note('exchange FAIL: ' + error.message); } else note('exchange OK');
+    } catch (e) { why = String(e && e.message || e); note('exchange THROW: ' + why); }
+  }
+  api._why = why;
   return new Promise(resolve => { api._resolve = resolve; check(); });
 };
 api.token = async () => (await api.sb.auth.getSession()).data.session?.access_token;
