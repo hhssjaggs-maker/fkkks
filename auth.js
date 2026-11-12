@@ -8,6 +8,7 @@ const CFG = window.AI_CONFIG, $ = s => document.querySelector(s);
 const enabled = !!(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY);
 const api = { enabled, cloud: false, sb: null, user: null, profile: null, guest: false };
 const GUEST = 'fa_guest';
+const log = [];
 
 function setMsg(t, bad) { const m = $('#gMsg'); m.textContent = t || ''; m.classList.toggle('bad', !!bad); }
 function state(s, msg, bad) {
@@ -75,11 +76,21 @@ api.start = async function () {
   });
   api.cloud = true;
   state('loading', 'กำลังเตรียมโรงละคร…');
-  api.sb.auth.onAuthStateChange(ev => { if (ev === 'SIGNED_OUT') location.reload(); });
+  api.sb.auth.onAuthStateChange((ev, sess) => {
+    log.push(ev + (sess ? '+session' : ''));
+    try { sessionStorage.setItem('fa_auth_log', log.join(' > ')); } catch {}
+    if (ev !== 'SIGNED_OUT' || api._leaving) return;
+    // ถูกออกจากระบบโดยไม่ได้กดเอง → เช็กซ้ำก่อน ไม่รีโหลดวนๆ
+    setTimeout(async () => {
+      const { data: { session } } = await api.sb.auth.getSession();
+      if (!session) state('error', 'ระบบถูกออกจากระบบเอง (SIGNED_OUT) · เหตุการณ์: ' + log.join(' > ') + ' — กด "ลองใหม่" แล้วล็อกอินอีกครั้ง; ถ้ายังซ้ำ แคปหน้านี้ส่งให้ผู้ช่วย', true);
+    }, 600);
+  });
   return new Promise(resolve => { api._resolve = resolve; check(); });
 };
 api.token = async () => (await api.sb.auth.getSession()).data.session?.access_token;
 api.signOut = async () => {
+  api._leaving = true;
   try { localStorage.removeItem(GUEST); } catch {}
   try { if (api.sb) await api.sb.auth.signOut(); } finally { location.reload(); }
 };
