@@ -480,3 +480,4 @@ body.typing .nav{transform:translateY(140%);opacity:0;pointer-events:none}
   .toast{bottom:96px}
 }
 body[data-cloud="1"] .me-row.cloud-only{display:flex!important}
+.glog{margin-top:6px;font-size:10.5px;line-height:1.5;color:#8aa3ad;word-break:break-word;text-align:left}

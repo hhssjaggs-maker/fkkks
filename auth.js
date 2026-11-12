@@ -8,10 +8,18 @@ const CFG = window.AI_CONFIG, $ = s => document.querySelector(s);
 const enabled = !!(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY);
 const api = { enabled, cloud: false, sb: null, user: null, profile: null, guest: false };
 const GUEST = 'fa_guest';
-const log = [];
+const VER = 'auth v3';
+let log = []; try { log = JSON.parse(sessionStorage.getItem('fa_auth_log') || '[]'); } catch {}
+function note(t) {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  log.push(p(d.getMinutes()) + ':' + p(d.getSeconds()) + ' ' + t); log = log.slice(-14);
+  try { sessionStorage.setItem('fa_auth_log', JSON.stringify(log)); } catch {}
+  const el = document.querySelector('#gLog'); if (el) el.textContent = VER + ' · ' + log.join(' › ');
+}
 
 function setMsg(t, bad) { const m = $('#gMsg'); m.textContent = t || ''; m.classList.toggle('bad', !!bad); }
 function state(s, msg, bad) {
+  note('state:' + s);
   const g = $('#gate'); g.hidden = false; g.dataset.state = s;
   requestAnimationFrame(() => g.classList.add('show')); setMsg(msg, bad);
 }
@@ -69,6 +77,7 @@ api.start = async function () {
   if (!enabled) return api;
   let guest = false; try { guest = CFG.ALLOW_GUEST && localStorage.getItem(GUEST) === '1'; } catch {}
   if (guest) { api.guest = true; return api; }           // โหมดผู้เยี่ยมเยือน (เก็บในเครื่อง)
+  note('start ' + (location.search.includes('code=') ? 'with-code' : 'no-code'));
   bind();
   if (!window.supabase) { state('error', 'โหลดไลบรารี Supabase ไม่สำเร็จ (เช็กอินเทอร์เน็ต)', true); return new Promise(() => {}); }
   api.sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, {
@@ -77,13 +86,12 @@ api.start = async function () {
   api.cloud = true;
   state('loading', 'กำลังเตรียมโรงละคร…');
   api.sb.auth.onAuthStateChange((ev, sess) => {
-    log.push(ev + (sess ? '+session' : ''));
-    try { sessionStorage.setItem('fa_auth_log', log.join(' > ')); } catch {}
+    note(ev + (sess ? '+session' : ''));
     if (ev !== 'SIGNED_OUT' || api._leaving) return;
     // ถูกออกจากระบบโดยไม่ได้กดเอง → เช็กซ้ำก่อน ไม่รีโหลดวนๆ
     setTimeout(async () => {
       const { data: { session } } = await api.sb.auth.getSession();
-      if (!session) state('error', 'ระบบถูกออกจากระบบเอง (SIGNED_OUT) · เหตุการณ์: ' + log.join(' > ') + ' — กด "ลองใหม่" แล้วล็อกอินอีกครั้ง; ถ้ายังซ้ำ แคปหน้านี้ส่งให้ผู้ช่วย', true);
+      if (!session) state('error', 'ระบบถูกออกจากระบบเอง (SIGNED_OUT) · เหตุการณ์: ' + log.join(' › ') + ' — กด "ลองใหม่" แล้วล็อกอินอีกครั้ง; ถ้ายังซ้ำ แคปหน้านี้ส่งให้ผู้ช่วย', true);
     }, 600);
   });
   return new Promise(resolve => { api._resolve = resolve; check(); });
