@@ -266,7 +266,7 @@ function renderConvs() {
   convs.forEach(c => {
     const d = document.createElement('div'); d.className = 'conv' + (c.id === cur.id ? ' active' : '');
     d.innerHTML = `<button class="conv-t"><b>${ic(c.mode === 'code' ? 'code' : 'crown')}<span>${esc(c.title)}</span></b><small>${relTime(c.updated_at)}</small></button><button class="conv-x" title="ลบ">${ic('trash')}</button>`;
-    d.querySelector('.conv-t').onclick = () => { openConv(c.id); closeDrawer(); };
+    d.querySelector('.conv-t').onclick = () => { openConv(c.id); closeDrawer(); go('chat'); };
     d.querySelector('.conv-x').onclick = async () => {
       if (!confirm(`ลบแชท "${c.title}" ?`)) return;
       const { error } = await sb().from('conversations').delete().eq('id', c.id);
@@ -311,7 +311,7 @@ function pushSettings() {
 const openDrawer = () => { document.body.classList.add('drawer-open'); loadConvs(); };
 const closeDrawer = () => document.body.classList.remove('drawer-open');
 $('#btnMenu').onclick = openDrawer; $('#btnCloseDrawer').onclick = closeDrawer; $('#scrim').onclick = closeDrawer;
-$('#btnNewChat').onclick = () => { newChat(); closeDrawer(); };
+$('#btnNewChat').onclick = () => { newChat(); closeDrawer(); go('chat'); };
 $('#btnSignOut').onclick = () => Auth.signOut();
 
 /* ---------- mode ---------- */
@@ -771,7 +771,37 @@ $('#btnClear').onclick = async () => {
     if (error) return dbWarn(error);
     convs = convs.filter(c => c.id !== cur.id);
   }
-  cur = { id: null, title: 'แชทใหม่', messages: [] }; save(); renderAll(); renderConvs(); toast('ล้างแชตแล้ว');
+  cur = { id: null, title: 'แชทใหม่', messages: [] }; save(); renderAll(); renderConvs(); toast('ล้างแชตแล้ว'); go('chat');
+};
+
+/* ---------- แถบนำทางล่าง + สลับหน้า ---------- */
+const PAGES = ['chat', 'studio', 'gallery', 'me'];
+let pageNow = 'chat';
+function go(p) {
+  const i = PAGES.indexOf(p); if (i < 0) return;
+  pageNow = p;
+  $('#nav').style.setProperty('--i', i);
+  $$('.nav-b').forEach(b => { const on = b.dataset.go === p; b.classList.toggle('on', on); if (on) { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); } });
+  $$('.page').forEach(s => s.classList.toggle('on', s.dataset.p === p));
+  if (p === 'chat') requestAnimationFrame(() => scrollDown(true));
+  window.Studio?.onShow(p);
+}
+$$('.nav-b').forEach(b => b.onclick = () => go(b.dataset.go));
+// ซ่อนแถบล่างตอนพิมพ์ (คีย์บอร์ดมือถือจะได้ไม่ชน)
+document.addEventListener('focusin', e => { if (e.target.matches('textarea,input[type=text],input[type=password]') && !e.target.closest('.modal-wrap')) document.body.classList.add('typing'); });
+document.addEventListener('focusout', () => setTimeout(() => { if (!document.activeElement || !document.activeElement.matches('textarea,input[type=text],input[type=password]')) document.body.classList.remove('typing'); }, 60));
+
+/* ตัวเชื่อมให้ studio.js */
+async function chatOnce(sys, text) {
+  const um = { role: 'user', text, files: [] };
+  const req = PROVIDER_FN[S.provider]([um], sys);
+  const res = await request(req, new AbortController().signal);
+  let t = ''; await readSSE(res, j => req.parse(j, d => { t += d; }));
+  return t;
+}
+window.AppBridge = {
+  toast, go, chatOnce,
+  chatInfo: () => ({ provider: S.provider, key: S.apiKey, base: S.baseUrl[S.provider] || '' })
 };
 
 /* ripple on buttons */
@@ -811,11 +841,12 @@ document.addEventListener('pointerdown', e => {
 /* ---------- init ---------- */
 (async function init() {
   applyMode(); syncWeb(); syncTest(); updSkillBadge();
-  await Auth.start();                       // ด่านคีย์ + Discord (ข้ามถ้ายังไม่ตั้ง Supabase)
+  await Auth.start();                       // ด่านล็อกอิน Google/Discord (ข้ามถ้ายังไม่ตั้ง Supabase)
   document.body.dataset.cloud = Auth.cloud ? '1' : '0';
   if (Auth.cloud) {
     $('#uName').textContent = Auth.displayName();
-    const av = $('#uAv'); if (Auth.profile?.avatar_url) { av.src = Auth.profile.avatar_url; av.referrerPolicy = 'no-referrer'; av.hidden = false; }
+    $('#uSub').textContent = 'ล็อกอินด้วย ' + (Auth.profile?.provider === 'google' ? 'Google' : Auth.profile?.provider === 'discord' ? 'Discord' : 'บัญชีของคุณ') + ' · แชตซิงก์กับฐานข้อมูล';
+    const av = $('#uAv'); if (Auth.profile?.avatar_url) { av.src = Auth.profile.avatar_url; av.referrerPolicy = 'no-referrer'; av.hidden = false; $('#uIni').hidden = true; }
     await pullSettings(); updSkillBadge();
     await loadConvs();
     if (convs.length) await openConv(convs[0].id); else renderAll();
@@ -823,6 +854,7 @@ document.addEventListener('pointerdown', e => {
     cur.messages = (S.localMessages || []).map(m => ({ ...m, done: true, saved: true }));
     renderAll();
   }
-  if (!useProxy() && !S.apiKey) setTimeout(() => toast('เริ่มต้น: กด ⚙️ แล้วใส่ API Key'), 800);
+  if (Auth.guest) { const b = $('#btnSignOut'); b.classList.remove('cloud-only'); $('span', b).textContent = 'เข้าสู่ระบบ'; }
+  if (!useProxy() && !S.apiKey) setTimeout(() => toast('เริ่มต้น: ไปที่ “ฉัน” → ตั้งค่า API แล้วใส่ API Key'), 800);
 })();
 })();

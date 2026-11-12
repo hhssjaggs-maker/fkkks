@@ -1,14 +1,13 @@
 /* ==========================================================
-   auth.js — ด่านเข้าระบบ: คีย์ + ล็อกอิน Discord (Supabase Auth)
-   ลำดับ: ใส่คีย์ → เข้าสู่ระบบด้วย Discord → ระบบแลกคีย์ที่ฐานข้อมูล
-          (ครั้งต่อไปไม่ต้องใส่คีย์อีก เพราะบัญชี Discord ถูกบันทึกเป็นสมาชิกแล้ว)
+   auth.js — ด่านเข้าระบบ: ล็อกอินด้วย Google หรือ Discord (Supabase Auth)
+   ไม่มีคีย์แล้ว — กดปุ่มแล้วเข้าได้เลย
    ถ้ายังไม่ได้ตั้ง SUPABASE_URL ใน config.js → ข้ามด่านนี้ (โหมดในเครื่อง)
    ========================================================== */
 window.Auth = (() => {
 const CFG = window.AI_CONFIG, $ = s => document.querySelector(s);
 const enabled = !!(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY);
-const api = { enabled, cloud: false, sb: null, user: null, profile: null };
-const PENDING = 'fa_pending_key';
+const api = { enabled, cloud: false, sb: null, user: null, profile: null, guest: false };
+const GUEST = 'fa_guest';
 
 function setMsg(t, bad) { const m = $('#gMsg'); m.textContent = t || ''; m.classList.toggle('bad', !!bad); }
 function state(s, msg, bad) {
@@ -16,29 +15,16 @@ function state(s, msg, bad) {
   requestAnimationFrame(() => g.classList.add('show')); setMsg(msg, bad);
 }
 function hide() { const g = $('#gate'); g.classList.remove('show'); setTimeout(() => { g.hidden = true; }, 600); }
+function meta() { return (api.user && api.user.user_metadata) || {}; }
 function who() {
-  const m = (api.user && api.user.user_metadata) || {};
-  return m.custom_claims?.global_name || m.full_name || m.name || 'ผู้เยี่ยมเยือน';
+  const m = meta();
+  return m.custom_claims?.global_name || m.full_name || m.name || api.user?.email || 'ผู้เยี่ยมเยือน';
 }
 function fail(e) {
   const t = String(e && e.message || e);
-  state('error', /relation .* does not exist|schema cache|members/i.test(t)
+  state('error', /relation .* does not exist|schema cache|touch_profile|function .* does not exist/i.test(t)
     ? 'อ่านฐานข้อมูลไม่ได้ — ยังไม่ได้รัน supabase/schema.sql ใช่ไหม? (' + t + ')'
     : 'เกิดข้อผิดพลาด: ' + t, true);
-}
-
-async function getMember() {
-  const { data, error } = await api.sb.from('members').select('user_id,discord_name,avatar_url').eq('user_id', api.user.id).maybeSingle();
-  if (error) throw error;
-  return data;
-}
-async function redeem(key) {
-  const { data, error } = await api.sb.rpc('redeem_key', { p_key: key });
-  if (error) {
-    if (/too_many_attempts/.test(error.message)) return { ok: false, error: 'ใส่คีย์ผิดบ่อยเกินไป — รอ 15 นาทีแล้วลองใหม่' };
-    return { ok: false, error: 'ตรวจคีย์ไม่สำเร็จ: ' + error.message };
-  }
-  return data === true ? { ok: true } : { ok: false, error: 'คีย์ไม่ถูกต้อง' };
 }
 
 async function check() {
@@ -46,46 +32,42 @@ async function check() {
     const { data: { session } } = await api.sb.auth.getSession();
     if (!session) return state('login');
     api.user = session.user; state('loading', 'กำลังตรวจสอบสิทธิ์…');
-    let prof = await getMember();
-    const pending = sessionStorage.getItem(PENDING);
-    if (!prof && pending) {
-      sessionStorage.removeItem(PENDING);
-      const r = await redeem(pending);
-      if (r.ok) prof = await getMember();
-      else { $('#gWho').textContent = who(); return state('needkey', r.error, true); }
-    }
-    if (prof) { api.profile = prof; hide(); api._resolve(api); }
-    else { $('#gWho').textContent = who(); state('needkey'); }
+    const { data: ok, error } = await api.sb.rpc('touch_profile');
+    if (error) throw error;
+    if (!ok) { $('#gWho').textContent = who(); return state('denied'); }
+    const m = meta();
+    api.profile = {
+      name: who(), avatar_url: m.avatar_url || m.picture || '',
+      provider: api.user.app_metadata?.provider || ''
+    };
+    hide(); api._resolve(api);
   } catch (e) { fail(e); }
 }
 
+async function oauth(provider) {
+  setMsg('กำลังพาไปที่ ' + (provider === 'google' ? 'Google' : 'Discord') + '…');
+  const { error } = await api.sb.auth.signInWithOAuth({
+    provider, options: { redirectTo: location.origin + location.pathname }
+  });
+  if (error) setMsg('เข้าสู่ระบบไม่สำเร็จ: ' + error.message, true);
+}
+
 function bind() {
-  const login = async () => {
-    const key = $('#gKey').value.trim();
-    if (key) sessionStorage.setItem(PENDING, key); else sessionStorage.removeItem(PENDING);
-    setMsg('กำลังพาไปที่ Discord…');
-    const { error } = await api.sb.auth.signInWithOAuth({
-      provider: 'discord', options: { redirectTo: location.origin + location.pathname }
-    });
-    if (error) setMsg('เข้าสู่ระบบไม่สำเร็จ: ' + error.message, true);
-  };
-  const doRedeem = async () => {
-    const key = $('#gKey2').value.trim();
-    if (!key) return setMsg('ใส่คีย์ก่อนนะ', true);
-    setMsg('กำลังตรวจคีย์…');
-    const r = await redeem(key);
-    if (r.ok) { $('#gKey2').value = ''; check(); } else setMsg(r.error, true);
-  };
-  $('#gDiscord').onclick = login;
-  $('#gKey').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
-  $('#gRedeem').onclick = doRedeem;
-  $('#gKey2').addEventListener('keydown', e => { if (e.key === 'Enter') doRedeem(); });
+  $('#gGoogle').onclick = () => oauth('google');
+  $('#gDiscord').onclick = () => oauth('discord');
   $('#gSignOut').onclick = () => api.signOut();
   $('#gRetry').onclick = () => location.reload();
+  const gl = $('#gGuest');
+  if (gl) {
+    gl.hidden = !CFG.ALLOW_GUEST;
+    gl.onclick = () => { try { localStorage.setItem(GUEST, '1'); } catch {} location.reload(); };
+  }
 }
 
 api.start = async function () {
   if (!enabled) return api;
+  let guest = false; try { guest = CFG.ALLOW_GUEST && localStorage.getItem(GUEST) === '1'; } catch {}
+  if (guest) { api.guest = true; return api; }           // โหมดผู้เยี่ยมเยือน (เก็บในเครื่อง)
   bind();
   if (!window.supabase) { state('error', 'โหลดไลบรารี Supabase ไม่สำเร็จ (เช็กอินเทอร์เน็ต)', true); return new Promise(() => {}); }
   api.sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, {
@@ -97,7 +79,10 @@ api.start = async function () {
   return new Promise(resolve => { api._resolve = resolve; check(); });
 };
 api.token = async () => (await api.sb.auth.getSession()).data.session?.access_token;
-api.signOut = async () => { try { await api.sb.auth.signOut(); } finally { location.reload(); } };
-api.displayName = () => api.profile?.discord_name || who();
+api.signOut = async () => {
+  try { localStorage.removeItem(GUEST); } catch {}
+  try { if (api.sb) await api.sb.auth.signOut(); } finally { location.reload(); }
+};
+api.displayName = () => api.profile?.name || (api.guest ? 'ผู้เยี่ยมเยือน' : 'คุณ');
 return api;
 })();
