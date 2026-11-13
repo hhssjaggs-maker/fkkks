@@ -109,7 +109,14 @@ const GEN = {
     const u = `${c.base}/${encodeURIComponent(prompt)}?width=${w}&height=${h}&seed=${seed}&model=${encodeURIComponent(c.model)}&nologo=true`;
     const headers = c.key ? { Authorization: 'Bearer ' + c.key } : {};
     try {
-      const res = await must(await fetch(u, { signal, headers }));
+      let res;
+      for (let t = 0; ; t++) {                       // ฟรี: ทีละรูป — ถ้าชน FREE_LIMIT รอแล้วลองใหม่เอง
+        const r = await fetch(u, { signal, headers });
+        if (r.status === 402 && t < 4 && /FREE_LIMIT/.test(await r.clone().text())) {
+          await new Promise(ok => setTimeout(ok, 7000)); if (signal.aborted) throw new DOMException('abort', 'AbortError'); continue;
+        }
+        res = await must(r); break;
+      }
       const blob = await res.blob(); if (!/^image\//.test(blob.type)) throw new Error('ไม่ได้รับรูปภาพ');
       return { blob };
     } catch (e) {
@@ -250,8 +257,9 @@ async function go() {
   if (PROV[C.provider].needKey && !c.key) { openSettings(); return B().toast('ใส่ API Key ของผู้ให้บริการรูปก่อนนะ'); }
   running = true; abortCtl = new AbortController(); $('#imgGo').classList.add('busy'); $('#imgEmpty').hidden = true;
   const p = fullPrompt(raw);
-  const jobs = Array.from({ length: count }, () => runOne(makeCard(p), p, raw));
-  await Promise.allSettled(jobs);
+  const cards = Array.from({ length: count }, () => makeCard(p));
+  if (C.provider === 'pollinations') { for (const cd of cards) { if (abortCtl.signal.aborted) { cd.remove(); continue; } await runOne(cd, p, raw); } }   // ฟรี: ทีละรูป
+  else await Promise.allSettled(cards.map(cd => runOne(cd, p, raw)));
   running = false; $('#imgGo').classList.remove('busy');
 }
 $('#imgGo').onclick = go;
