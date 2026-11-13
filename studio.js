@@ -13,8 +13,8 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 
 /* ---------- ค่าตั้งต้น ---------- */
 const PROV = {
-  pollinations: { label: 'Pollinations (ฟรี)', base: 'https://image.pollinations.ai/prompt', model: 'flux', needKey: false, ref: false,
-    note: 'ฟรี ไม่ต้องมี key (ถ้าบริการเปลี่ยนไปให้ใส่ key/Base URL ใหม่) · ไม่รองรับรูปอ้างอิง' },
+  pollinations: { label: 'Pollinations', base: 'https://gen.pollinations.ai/image', model: 'flux', needKey: true, ref: false,
+    note: 'ขอ key ที่ enter.pollinations.ai/keys แล้ววางที่นี่ (ชนิด sk_ ใช้บนเครื่องของคุณเองเท่านั้น) · ไม่รองรับรูปอ้างอิง' },
   gemini: { label: 'Google Gemini', base: 'https://generativelanguage.googleapis.com', model: 'gemini-2.5-flash-image', needKey: true, ref: true,
     note: 'ใช้ Gemini API key (AIza…) · รองรับรูปอ้างอิง/แก้ไขรูป' },
   openai: { label: 'OpenAI Images', base: 'https://api.openai.com/v1', model: 'gpt-image-1', needKey: true, ref: true,
@@ -41,6 +41,7 @@ const RATIOS = { '1:1': [1024, 1024], '3:4': [896, 1152], '4:3': [1152, 896], '1
 const KEY = 'fontaine_img_v1';
 let C = { provider: 'pollinations', key: {}, base: {}, model: {} };
 try { C = { ...C, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch {}
+if (/image\.pollinations\.ai/.test(C.base?.pollinations || '')) { delete C.base.pollinations; }   // ย้ายไปโดเมนใหม่
 const saveC = () => { try { localStorage.setItem(KEY, JSON.stringify(C)); } catch {} };
 const cfg = (p = C.provider) => ({
   key: C.key[p] || chatKeyFor(p), base: (C.base[p] || PROV[p].base).replace(/\/$/, ''), model: C.model[p] || PROV[p].model
@@ -114,8 +115,9 @@ const GEN = {
     } catch (e) {
       if (e.name === 'AbortError' || /HTTP/.test(e.message)) throw e;
       // CORS ปิด → ลองแสดงผ่านแท็ก <img> แทน (บันทึกเป็นลิงก์)
-      await new Promise((ok, no) => { const im = new Image(); im.onload = ok; im.onerror = () => no(new Error('โหลดรูปจาก Pollinations ไม่สำเร็จ (เช็กอินเทอร์เน็ต/บริการอาจเปลี่ยนไป)')); im.src = u; });
-      return { url: u };
+      const u2 = c.key ? u + '&key=' + encodeURIComponent(c.key) : u;
+      await new Promise((ok, no) => { const im = new Image(); im.onload = ok; im.onerror = () => no(new Error('โหลดรูปจาก Pollinations ไม่สำเร็จ (เช็ก key/อินเทอร์เน็ต)')); im.src = u2; });
+      return { url: u2 };
     }
   },
   async gemini(prompt, { signal }) {
