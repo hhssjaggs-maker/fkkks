@@ -481,3 +481,26 @@ body.typing .nav{transform:translateY(140%);opacity:0;pointer-events:none}
 }
 body[data-cloud="1"] .me-row.cloud-only{display:flex!important}
 .glog{margin-top:6px;font-size:10.5px;line-height:1.5;color:#8aa3ad;word-break:break-word;text-align:left}
+
+/* ---------- กดค้างปุ่มแชต → Lobby ---------- */
+.nav-b{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:manipulation}
+.hold-ring{position:absolute;left:50%;top:0;width:46px;height:46px;margin-left:-23px;transform:rotate(-90deg);opacity:0;pointer-events:none;transition:opacity .25s,top .55s cubic-bezier(.34,1.45,.5,1)}
+.nav-b.on .hold-ring{top:-21px}
+.nav-b.holding .hold-ring{opacity:1}
+.hr-bg,.hr-fg{fill:none;stroke-width:3.5}
+.hr-bg{stroke:rgba(120,170,190,.25)}
+.hr-fg{stroke:#38d6ff;stroke-linecap:round;stroke-dasharray:125.66;stroke-dashoffset:125.66;filter:drop-shadow(0 0 4px #38d6ff)}
+.nav-b.holding .i{transform:scale(.9)}
+.nav-b.on.holding .i{transform:translateY(-21px) scale(.9)}
+.nav-b.holding-done .hold-ring{animation:ringdone .5s ease-out}
+@keyframes ringdone{50%{transform:rotate(-90deg) scale(1.35)}}
+body.in-lobby .nav{transform:translateY(140%);opacity:0;pointer-events:none}
+body.in-lobby .app{padding-bottom:12px}
+.back-b{display:inline-flex;align-items:center;gap:6px}.back-b .i{width:16px;height:16px}
+.lobby-list{display:flex;flex-direction:column;gap:10px}
+.lb-card{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:18px;text-align:left;border:1px solid var(--glass-b);background:var(--glass);color:var(--ink);font:inherit;cursor:pointer;
+  box-shadow:var(--shadow);animation:in .5s var(--spring) both;transition:transform .35s var(--spring)}
+.lb-card:active{transform:scale(.97)}
+.lb-ic{flex:none;width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:var(--user);color:#fff}.lb-ic .i{width:22px;height:22px}
+.lb-t{display:flex;flex-direction:column;min-width:0}.lb-t b{font-size:15.5px}.lb-t small{color:var(--muted);font-size:12.5px;line-height:1.5}
+.lb-empty{cursor:default;border-style:dashed;opacity:.9}.lb-empty .lb-ic{background:var(--accent-soft);color:var(--accent)}

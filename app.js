@@ -778,15 +778,58 @@ $('#btnClear').onclick = async () => {
 const PAGES = ['chat', 'studio', 'gallery', 'me'];
 let pageNow = 'chat';
 function go(p) {
-  const i = PAGES.indexOf(p); if (i < 0) return;
+  const i = PAGES.indexOf(p); if (i < 0 && p !== 'lobby') return;
   pageNow = p;
-  $('#nav').style.setProperty('--i', i);
-  $$('.nav-b').forEach(b => { const on = b.dataset.go === p; b.classList.toggle('on', on); if (on) { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); } });
+  document.body.classList.toggle('in-lobby', p === 'lobby');
+  if (i >= 0) $('#nav').style.setProperty('--i', i);
+  $$('.nav-b').forEach(b => { const on = b.dataset.go === p && p !== 'lobby'; b.classList.toggle('on', on); if (on) { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); } });
   $$('.page').forEach(s => s.classList.toggle('on', s.dataset.p === p));
   if (p === 'chat') requestAnimationFrame(() => scrollDown(true));
+  if (p === 'lobby') renderLobby();
   window.Studio?.onShow(p);
 }
-$$('.nav-b').forEach(b => b.onclick = () => go(b.dataset.go));
+let swallowClick = false;
+$$('.nav-b').forEach(b => b.onclick = () => { if (swallowClick) { swallowClick = false; return; } go(b.dataset.go); });
+
+/* ---------- Lobby: กดค้างปุ่มแชต → ขออนุญาต → เข้า Lobby ---------- */
+function renderLobby() {
+  $('#lobbySub').textContent = (Auth.cloud ? Auth.displayName() + ' · ' : '') + 'แชต: ' + S.provider + ' / ' + S.model[S.provider];
+  const L = $('#lobbyList'); L.innerHTML = '';
+  const items = CFG.LOBBY_ITEMS || [];
+  if (!items.length) {
+    L.innerHTML = '<div class="lb-card lb-empty"><span class="lb-ic">' + ic('plus') + '</span><span class="lb-t"><b>ยังไม่มีระบบใหม่</b><small>ที่นี่คือศูนย์กลางของระบบที่จะเพิ่มในอนาคต — เพิ่มรายการได้ใน config.js → LOBBY_ITEMS</small></span></div>';
+  }
+  items.forEach(it => {
+    const b = document.createElement('button'); b.className = 'lb-card';
+    b.innerHTML = '<span class="lb-ic">' + ic(it.icon || 'spark') + '</span><span class="lb-t"><b></b><small></small></span>';
+    b.querySelector('b').textContent = it.name || 'ระบบ'; b.querySelector('small').textContent = it.desc || '';
+    b.onclick = () => { if (it.page) go(it.page); else if (it.url) window.open(it.url, '_blank', 'noopener'); };
+    L.append(b);
+  });
+}
+(() => {
+  const btn = $('.nav-b[data-go=chat]'), fg = $('.hr-fg', btn), HOLD = Math.max(3000, CFG.LOBBY_HOLD_MS || 6000), LEAD = 500, C = 125.66;
+  let t0 = 0, raf = 0, x0 = 0, y0 = 0;
+  const reset = () => { cancelAnimationFrame(raf); raf = 0; btn.classList.remove('holding'); fg.style.strokeDashoffset = C; };
+  const tick = () => {
+    const p = (performance.now() - t0 - LEAD) / (HOLD - LEAD);
+    if (p > 0) { btn.classList.add('holding'); fg.style.strokeDashoffset = C * (1 - Math.min(1, p)); }
+    if (p >= 1) {
+      swallowClick = true; setTimeout(() => { swallowClick = false; }, 700);
+      btn.classList.add('holding-done'); setTimeout(() => btn.classList.remove('holding-done'), 600);
+      try { navigator.vibrate && navigator.vibrate([30, 40, 60]); } catch {}
+      reset(); openModal('#mLobby'); return;
+    }
+    raf = requestAnimationFrame(tick);
+  };
+  btn.addEventListener('pointerdown', e => { if (e.button > 0) return; x0 = e.clientX; y0 = e.clientY; t0 = performance.now(); reset(); raf = requestAnimationFrame(tick); });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => btn.addEventListener(ev, reset));
+  btn.addEventListener('pointermove', e => { if (raf && Math.hypot(e.clientX - x0, e.clientY - y0) > 14) reset(); });
+  btn.addEventListener('contextmenu', e => e.preventDefault());
+  $('#lobbyNo').onclick = () => closeModal('#mLobby');
+  $('#lobbyYes').onclick = () => { closeModal('#mLobby'); go('lobby'); };
+  $('#lobbyBack').onclick = () => go('chat');
+})();
 // ซ่อนแถบล่างตอนพิมพ์ (คีย์บอร์ดมือถือจะได้ไม่ชน)
 document.addEventListener('focusin', e => { if (e.target.matches('textarea,input[type=text],input[type=password]') && !e.target.closest('.modal-wrap')) document.body.classList.add('typing'); });
 document.addEventListener('focusout', () => setTimeout(() => { if (!document.activeElement || !document.activeElement.matches('textarea,input[type=text],input[type=password]')) document.body.classList.remove('typing'); }, 60));
