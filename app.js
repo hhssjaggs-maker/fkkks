@@ -775,18 +775,19 @@ $('#btnClear').onclick = async () => {
 };
 
 /* ---------- แถบนำทางล่าง + สลับหน้า ---------- */
-const PAGES = ['chat', 'studio', 'gallery', 'me'];
+const PAGES = ['chat', 'studio', 'gallery', 'me'], SUB = ['lobby', 'hub'];
 let pageNow = 'chat';
 function go(p) {
-  const i = PAGES.indexOf(p); if (i < 0 && p !== 'lobby') return;
+  const i = PAGES.indexOf(p); if (i < 0 && !SUB.includes(p)) return;
   pageNow = p;
-  document.body.classList.toggle('in-lobby', p === 'lobby');
+  document.body.classList.toggle('in-lobby', SUB.includes(p));
   if (i >= 0) $('#nav').style.setProperty('--i', i);
-  $$('.nav-b').forEach(b => { const on = b.dataset.go === p && p !== 'lobby'; b.classList.toggle('on', on); if (on) { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); } });
+  $$('.nav-b').forEach(b => { const on = b.dataset.go === p && !SUB.includes(p); b.classList.toggle('on', on); if (on) { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); } });
   $$('.page').forEach(s => s.classList.toggle('on', s.dataset.p === p));
   if (p === 'chat') requestAnimationFrame(() => scrollDown(true));
   if (p === 'lobby') renderLobby();
   window.Studio?.onShow(p);
+  window.Hub?.onPage(p);
 }
 let swallowClick = false;
 $$('.nav-b').forEach(b => b.onclick = () => { if (swallowClick) { swallowClick = false; return; } go(b.dataset.go); });
@@ -795,10 +796,11 @@ $$('.nav-b').forEach(b => b.onclick = () => { if (swallowClick) { swallowClick =
 function renderLobby() {
   $('#lobbySub').textContent = (Auth.cloud ? Auth.displayName() + ' · ' : '') + 'แชต: ' + S.provider + ' / ' + S.model[S.provider];
   const L = $('#lobbyList'); L.innerHTML = '';
-  const items = CFG.LOBBY_ITEMS || [];
-  if (!items.length) {
+  const items = (CFG.LOBBY_ITEMS || []).slice();
+  if (false) {
     L.innerHTML = '<div class="lb-card lb-empty"><span class="lb-ic">' + ic('plus') + '</span><span class="lb-t"><b>ยังไม่มีระบบใหม่</b><small>ที่นี่คือศูนย์กลางของระบบที่จะเพิ่มในอนาคต — เพิ่มรายการได้ใน config.js → LOBBY_ITEMS</small></span></div>';
   }
+  items.unshift({ name: 'ชุมชน', desc: Auth.cloud ? 'ห้องแชตแบบ Discord + ห้องคุยเสียง (เชื่อม Minecraft ภายหลัง)' : 'ห้องแชต + ห้องเสียง — ต้องล็อกอินก่อน', page: 'hub', icon: 'hub' });
   items.forEach(it => {
     const b = document.createElement('button'); b.className = 'lb-card';
     b.innerHTML = '<span class="lb-ic">' + ic(it.icon || 'spark') + '</span><span class="lb-t"><b></b><small></small></span>';
