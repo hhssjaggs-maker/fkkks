@@ -195,14 +195,17 @@
     <header class="top glass st-top">
       <div class="brand">
         <div class="orb sm"><svg class="i" aria-hidden="true"><use href="#i-hub"/></svg></div>
-        <div class="brand-t"><b>ชุมชน</b><small id="hubSub">ออนไลน์</small></div>
+        <div class="brand-t"><b id="hubTitle">ชุมชน</b><small id="hubSub">ออนไลน์</small></div>
       </div>
       <button class="btn sm back-b" id="hubBack"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg><span>Lobby</span></button>
     </header>
     <div class="hub-tabs glass" id="hubTabs">
       <button class="hub-t on" data-t="text"><svg class="i" aria-hidden="true"><use href="#i-chat"/></svg><span>ข้อความ</span><i class="dot"></i></button>
       <button class="hub-t" data-t="voice"><svg class="i" aria-hidden="true"><use href="#i-mic"/></svg><span>เสียง</span></button>
+      <button class="hub-t" data-t="mc"><svg class="i" aria-hidden="true"><use href="#i-hub"/></svg><span>เกม</span></button>
+      <button class="hub-t" data-t="ctl" hidden><svg class="i" aria-hidden="true"><use href="#i-sliders"/></svg><span>ควบคุม</span></button>
     </div>
+    <div id="hubAnn" class="hub-ann glass" hidden></div>
 
     <div class="hub-pane" id="hubText">
       <p id="hubTextNote" class="empty-note" hidden></p>
@@ -228,6 +231,13 @@
         <button class="vc-b" id="vcDeaf" title="ปิดเสียงทั้งหมด"></button>
         <button class="vc-b leave" id="vcLeave" title="วางสาย"><svg class="i" aria-hidden="true"><use href="#i-hangup"/></svg></button>
       </div>
+    </div>
+    <div class="hub-pane" id="hubMc" hidden>
+      <div class="st-scroll"><div id="mcMe"></div><div id="mcList"></div></div>
+    </div>
+
+    <div class="hub-pane" id="hubCtl" hidden>
+      <div class="st-scroll"></div>
     </div>
     <div id="vcAudio" hidden></div>
   </section>
