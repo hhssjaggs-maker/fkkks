@@ -633,3 +633,6 @@ body.in-lobby .app{padding-bottom:12px}
 .mc-card .row-h{flex-wrap:wrap}.swatches{gap:8px}.swatch{width:32px;height:32px}
 .row-in .btn{flex:none}
 .row-in input{width:0}.mc-link input{width:100%}
+
+.gate[data-state="human"] .g-pane[data-for="human"]{display:flex;animation:in .5s var(--ease) both}
+.g-ts{display:flex;justify-content:center;min-height:68px;width:100%}

@@ -8,7 +8,7 @@ const CFG = window.AI_CONFIG, $ = s => document.querySelector(s);
 const enabled = !!(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY);
 const api = { enabled, cloud: false, sb: null, user: null, profile: null, guest: false };
 const GUEST = 'fa_guest';
-const VER = 'auth v4';
+const VER = 'auth v5';
 let log = []; try { log = JSON.parse(sessionStorage.getItem('fa_auth_log') || '[]'); } catch {}
 function note(t) {
   const d = new Date(), p = n => String(n).padStart(2, '0');
@@ -43,7 +43,11 @@ async function check() {
     api.user = session.user; state('loading', 'กำลังตรวจสอบสิทธิ์…');
     const { data: ok, error } = await api.sb.rpc('touch_profile');
     if (error) throw error;
-    if (!ok) { $('#gWho').textContent = who(); return state('denied'); }
+    if (!ok) {
+      let nh = false; try { const r = await api.sb.rpc('needs_human'); nh = !r.error && r.data === true; } catch {}
+      if (nh) return humanGate();
+      $('#gWho').textContent = who(); return state('denied');
+    }
     const m = meta();
     api.profile = {
       name: who(), avatar_url: m.avatar_url || m.picture || '',
@@ -51,6 +55,44 @@ async function check() {
     };
     hide(); api._resolve(api);
   } catch (e) { fail(e); }
+}
+
+// ---- ยืนยันว่าไม่ใช่บอท (Cloudflare Turnstile) ----
+let tsWidget = null;
+function loadTurnstile() {
+  return new Promise((res, rej) => {
+    if (window.turnstile) return res();
+    const s = document.createElement('script');
+    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    s.async = true; s.onload = () => res(); s.onerror = () => rej(new Error('โหลดตัวยืนยันไม่สำเร็จ (เช็กอินเทอร์เน็ต/ตัวบล็อกโฆษณา)'));
+    document.head.appendChild(s);
+  });
+}
+async function submitHuman(token) {
+  setMsg('กำลังตรวจสอบ…');
+  try {
+    const sess = (await api.sb.auth.getSession()).data.session;
+    const r = await fetch(CFG.SUPABASE_URL.replace(/\/$/, '') + '/functions/v1/verify-human', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + sess.access_token, apikey: CFG.SUPABASE_ANON_KEY },
+      body: JSON.stringify({ token })
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error === 'too_many_attempts' ? 'ลองหลายครั้งเกินไป รอสัก 10 นาทีแล้วลองใหม่' : (j.error || ('HTTP ' + r.status)));
+    note('human OK'); setMsg(''); return check();
+  } catch (e) {
+    setMsg('ยืนยันไม่สำเร็จ: ' + (e.message || e), true);
+    try { window.turnstile.reset(tsWidget); } catch {}
+  }
+}
+async function humanGate() {
+  state('human');
+  if (!CFG.TURNSTILE_SITE_KEY) return state('error', 'เซิร์ฟเวอร์เปิดระบบยืนยันคนจริงแล้ว แต่ยังไม่ได้ใส่ TURNSTILE_SITE_KEY ใน config.js', true);
+  try {
+    await loadTurnstile();
+    const box = $('#gTurnstile'); box.innerHTML = '';
+    tsWidget = window.turnstile.render(box, { sitekey: CFG.TURNSTILE_SITE_KEY, callback: submitHuman, 'error-callback': () => setMsg('ตัวยืนยันขัดข้อง ลองรีเฟรช', true), 'expired-callback': () => window.turnstile.reset(tsWidget) });
+  } catch (e) { state('error', String(e.message || e), true); }
 }
 
 async function oauth(provider) {
