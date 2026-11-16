@@ -115,6 +115,7 @@ function connectVoice() {
   V.ch = sb().channel(VCHAN, { config: { broadcast: { self: false }, presence: { key: me.key } } });
   V.ch.on('presence', { event: 'sync' }, onSync);
   V.ch.on('broadcast', { event: 'sig' }, ({ payload }) => onSig(payload));
+  V.ch.on('broadcast', { event: 'pos' }, ({ payload }) => onPos(payload));
   V.ch.subscribe(async st => {
     if (st === 'SUBSCRIBED') { V.ready = true; vcNote(''); await track(); }
     else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT') vcNote('เชื่อมต่อระบบเสียงไม่ได้ (Realtime) — ลองรีเฟรชหน้า');
@@ -187,10 +188,31 @@ async function onSig(m) {
     }
   } catch (e) { console.warn('sig', e); }
 }
+/* เสียงของแต่ละคนผ่าน WebAudio: ปรับดัง/เบาตามระยะ + ซ้าย/ขวา (3D) ได้ลื่นกว่า audio.volume (มือถือหลายรุ่นไม่ยอมให้ปรับ) */
+const outs = new Map();
+function route(k, stream, a) {
+  if (!V.ctx) return false;
+  try {
+    const old = outs.get(k); if (old) { try { old.src.disconnect(); } catch {} }
+    const src = V.ctx.createMediaStreamSource(stream), gain = V.ctx.createGain();
+    const pan = V.ctx.createStereoPanner ? V.ctx.createStereoPanner() : null;
+    src.connect(gain); if (pan) { gain.connect(pan); pan.connect(V.ctx.destination); } else gain.connect(V.ctx.destination);
+    gain.gain.value = 1; outs.set(k, { src, gain, pan });
+    a.muted = true;                                   // ต้องผูก <audio> ไว้ให้ Chrome ส่งเสียงเข้า WebAudio แต่ปิดเสียงตัวนี้
+    return true;
+  } catch { return false; }
+}
+function setOut(k, vol, pan) {
+  const o = outs.get(k), t = V.ctx ? V.ctx.currentTime : 0;
+  vol = V.deaf ? 0 : Math.max(0, Math.min(1, vol));
+  if (o) { o.gain.gain.setTargetAtTime(vol, t, 0.06); if (o.pan) o.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, pan || 0)), t, 0.06); return; }
+  const a = $(`#vcAudio audio[data-k="${CSS.escape(k)}"]`); if (a) { a.muted = V.deaf; try { a.volume = vol; } catch {} }
+}
 function attachRemote(k, stream) {
   let a = $(`#vcAudio audio[data-k="${CSS.escape(k)}"]`);
   if (!a) { a = document.createElement('audio'); a.dataset.k = k; a.autoplay = true; a.setAttribute('playsinline', ''); $('#vcAudio').append(a); }
   a.srcObject = stream; a.muted = V.deaf; a.play && a.play().catch(() => {});
+  route(k, stream, a);
   watch(k, stream);
 }
 function watch(k, stream) {
@@ -203,6 +225,7 @@ function watch(k, stream) {
 function dropPeer(k, keepFails) {
   const p = peers.get(k); if (p) { try { p.pc.close(); } catch {} peers.delete(k); }
   const a = $(`#vcAudio audio[data-k="${CSS.escape(k)}"]`); if (a) { a.srcObject = null; a.remove(); }
+  const o = outs.get(k); if (o) { try { o.src.disconnect(); o.gain.disconnect(); } catch {} outs.delete(k); }
   const l = levels.get(k); if (l) { try { l.src.disconnect(); } catch {} levels.delete(k); }
   if (!keepFails) fails.delete(k);
 }
@@ -246,7 +269,8 @@ async function leave() {
 }
 function applyMute() {
   if (V.local) V.local.getAudioTracks().forEach(t => { t.enabled = !V.muted; });
-  $$('#vcAudio audio').forEach(a => { a.muted = V.deaf; });
+  $$('#vcAudio audio').forEach(a => { a.muted = outs.has(a.dataset.k) ? true : V.deaf; });
+  if (typeof audioTick === 'function') audioTick();
 }
 async function toggleMute() { if (!V.room) return; V.muted = !V.muted; if (!V.muted) V.deaf = false; applyMute(); mcPushMic(); await track(); renderVoice(); pill(); }
 async function toggleDeaf() { if (!V.room) return; V.deaf = !V.deaf; V.muted = V.deaf ? true : V.muted; applyMute(); mcPushMic(); await track(); renderVoice(); pill(); }
@@ -254,7 +278,7 @@ async function toggleDeaf() { if (!V.room) return; V.deaf = !V.deaf; V.muted = V
 function roomsList() {
   const map = new Map(); if (!M.missing) map.set('mc', { id: 'mc', name: 'Minecraft · ระยะใกล้', desc: 'ยิ่งใกล้ยิ่งได้ยินชัด' });
   VROOMS.forEach(r => map.set(r.id, { ...r }));
-  Object.values(V.members).forEach(m => { if (m.room && !map.has(m.room)) map.set(m.room, { id: m.room, name: m.roomName || m.room, desc: 'ห้องส่วนตัว', custom: true }); });
+  Object.values(V.members).forEach(m => { if (m.room && m.room !== 'tune' && !map.has(m.room)) map.set(m.room, { id: m.room, name: m.roomName || m.room, desc: 'ห้องส่วนตัว', custom: true }); });
   return [...map.values()];
 }
 function renderVoice() {
@@ -285,6 +309,7 @@ function renderVoice() {
     $('#vcDeaf').classList.toggle('off', V.deaf); $('#vcDeaf').innerHTML = ic(V.deaf ? 'headphones-off' : 'headphones');
     // คืนไฟพูดหลัง re-render ใช้การ poll ถัดไป
   }
+  if (typeof tnPanel === 'function') tnPanel();
 }
 function pill() {
   const p = $('#vcPill'); if (!p) return;
@@ -327,7 +352,7 @@ async function mcInit() {
   applyCfg();
   sb().channel('mc-cfg').on('postgres_changes', { event: '*', schema: 'public', table: 'mc_config' }, reloadCfg).subscribe();
   await loadPlayers(); renderVoice(); track();
-  setInterval(mcTick, 2000);
+  setInterval(mcTick, 1000);
 }
 async function reloadCfg() {
   const { data } = await sb().from('mc_config').select('key,value');
@@ -345,7 +370,7 @@ async function loadPlayers() {
 function mcTick() {
   if (document.hidden) return; M.tick++;
   const fast = V.room === 'mc' || (curPage === 'hub' && (tab === 'mc' || tab === 'ctl'));
-  if (fast || (curPage === 'hub' && M.tick % 5 === 0)) loadPlayers();
+  if (fast || (curPage === 'hub' && M.tick % 5 === 0)) loadPlayers();   // เรียกทุก 1 วิ ตอนอยู่ห้องเสียงเกม
 }
 function syncTabs() {
   const b = $('#hubTabs [data-t=ctl]'); if (b) b.hidden = !isOpMe();
@@ -377,13 +402,15 @@ function renderMc(force) {
     if (!M.link) {
       box.innerHTML = `<div class="mc-card glass"><h4>เชื่อมกับตัวละครในเกม</h4>
         <p class="hint">ในเกมกดใช้ไอเทม <b>Fontaine Voice Remote</b> → จะเห็น "รหัสเชื่อมเว็บ" 6 หลัก (ถ้าไม่มีไอเทม ให้ OP พิมพ์ <code>/give @s fontaine:voice_remote</code>) แล้วใส่ด้านล่าง ทำครั้งเดียวจบ</p>
-        <form id="mcLinkForm" class="mc-link"><input id="mcName" type="text" placeholder="ชื่อในเกม (Gamertag)" autocomplete="off" maxlength="32"><input id="mcCode" type="text" inputmode="numeric" placeholder="รหัส 6 หลัก" autocomplete="off" maxlength="8"><button class="btn primary">เชื่อมต่อ</button></form></div>`;
+        <form id="mcLinkForm" class="mc-link"><input id="mcName" type="text" placeholder="ชื่อในเกม (Gamertag)" autocomplete="off" maxlength="32"><input id="mcCode" type="text" inputmode="numeric" placeholder="รหัส 6 หลัก" autocomplete="off" maxlength="8"><button class="btn primary">เชื่อมต่อ</button></form></div>
+        <button type="button" class="btn tn-open" id="mcTune">${ic('headphones')} ทดสอบ/จูนเสียงก่อนเข้าเกม</button>`;
     } else {
       const mic = !me_ || me_.mic !== false, rng = me_ ? me_.hear_range : 24;
       box.innerHTML = `<div class="mc-card glass"><div class="mc-me">${avatarHtml(M.link.mc_name, '', 'lg')}<div class="mc-who"><b>${esc(M.link.mc_name)}${me_ && me_.is_op ? '<i class="op-b">OP</i>' : ''}</b><small>${me_ && me_.online ? '<span class="on-dot"></span> อยู่ในเกม' : 'ออฟไลน์'}</small></div><button class="btn sm" id="mcUnlink">เลิกเชื่อม</button></div>
         <div class="row-sw"><span>${ic(mic ? 'mic' : 'mic-off')} ไมค์</span><label class="tg"><input type="checkbox" id="mcMicSw" ${mic ? 'checked' : ''}><i></i></label></div>
         <div class="row-rg"><div class="row-h"><span>ระยะที่ได้ยินเสียง</span><b id="mcRangeV">${rng} บล็อก</b></div><input type="range" id="mcRange" class="rg" min="4" max="128" step="2" value="${rng}"></div>
-        <p class="hint">ตั้งได้ทั้งที่นี่และจากไอเทมในเกม — ซิงก์กันอัตโนมัติ</p></div>`;
+        <p class="hint">ตั้งได้ทั้งที่นี่และจากไอเทมในเกม — ซิงก์กันอัตโนมัติ</p></div>
+        <button type="button" class="btn tn-open" id="mcTune">${ic('headphones')} ทดสอบ/จูนเสียงก่อนเข้าเกม</button>`;
     }
   }
   const on = M.players.filter(p => p.online), my = mcMe();
@@ -402,6 +429,7 @@ $('#hubMc').addEventListener('submit', async e => {
   toast('เชื่อมกับ ' + (M.link ? M.link.mc_name : name) + ' แล้ว ✓'); await loadPlayers(); renderMc(true); renderVoice(); track(); syncTabs();
 });
 $('#hubMc').addEventListener('click', async e => {
+  if (e.target.closest('#mcTune')) return setTab('tune');
   if (e.target.closest('#mcUnlink')) { await sb().rpc('mc_unlink'); M.link = null; if (V.room === 'mc') leave(); renderMc(true); renderVoice(); track(); syncTabs(); }
 });
 $('#hubMc').addEventListener('input', e => { if (e.target.id === 'mcRange') $('#mcRangeV').textContent = e.target.value + ' บล็อก'; });
@@ -429,21 +457,176 @@ function mcVoiceSync() {
     applyMute(); track(); renderVoice(); pill();
   }
 }
-function proxVolume(d, R) { if (d >= R) return 0; const inner = R * 0.2; return d <= inner ? 1 : Math.pow((R - d) / (R - inner), 1.5); }
-setInterval(() => {
-  if (V.room !== 'mc') return;
+/* ---- ความดังตามระยะ (ใช้ร่วมกันทั้งในเกมและห้องจูน) ---- */
+const LS = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+const CURVES = { soft: 1.6, mid: 2.4, steep: 3.4 };            // ยิ่งเลขมาก เสียงยิ่งหายเร็วเมื่อห่าง
+let curveKey = LS.get('fv_curve'); if (!CURVES[curveKey]) curveKey = 'mid';
+const cl = (v, a, b) => Math.max(a, Math.min(b, v));
+const innerR = R => Math.min(2, R * 0.1);                     // ใกล้กว่านี้ = ดังเต็ม
+function proxVolume(d, R) { if (d >= R) return 0; const inn = innerR(R); if (d <= inn) return 1; return Math.pow(1 - (d - inn) / (R - inn), CURVES[curveKey]); }
+const panOf = (dx, d) => d < 0.5 ? 0 : cl(dx / d, -1, 1) * Math.min(1, d / 4);   // ซ้าย/ขวา: ยิ่งใกล้ยิ่งอยู่กลาง
+
+function audioTick() {
   const my = mcMe(), cap = M.cfg.range || 128, R = my ? Math.min(my.hear_range || 24, cap) : 24;
-  $$('#vcAudio audio').forEach(a => {
-    const m = V.members[a.dataset.k], pl = m && m.mc ? M.players.find(p => p.name === m.mc) : null;
-    let vol = 0, txt = '';
-    if (my && my.online && pl && pl.online && pl.dim === my.dim) {
-      const d = Math.hypot(pl.x - my.x, pl.y - my.y, pl.z - my.z); vol = proxVolume(d, R); txt = distTxt(d) + ' บล็อก';
-    } else if (pl && pl.online) txt = 'คนละมิติ';
-    else txt = 'ไม่อยู่ในเกม';
-    try { a.volume = Math.max(0, Math.min(1, vol)); } catch { }
-    const t = $(`#vcTiles [data-k="${CSS.escape(a.dataset.k)}"] [data-d]`); if (t) t.textContent = txt;
+  if (V.room) $$('#vcAudio audio').forEach(a => {
+    const k = a.dataset.k, m = V.members[k];
+    let vol = 1, pan = 0, txt = '';
+    if (V.room === 'mc') {
+      const pl = m && m.mc ? M.players.find(p => p.name === m.mc) : null; vol = 0;
+      if (my && my.online && pl && pl.online && pl.dim === my.dim) {
+        const d = Math.hypot(pl.x - my.x, pl.y - my.y, pl.z - my.z); vol = proxVolume(d, R); txt = distTxt(d) + ' บล็อก';
+      } else if (pl && pl.online) txt = 'คนละมิติ';
+      else txt = 'ไม่อยู่ในเกม';
+    } else if (V.room === 'tune') {
+      const q = TN.pos[k];
+      if (q && Date.now() - q.t < 6000) { const dx = q.x - TN.me.x, dy = q.y - TN.me.y, d = Math.hypot(dx, dy); vol = proxVolume(d, TN.R); pan = panOf(dx, d); txt = distTxt(d) + ' บล็อก'; }
+      else { vol = 0; txt = 'รอตำแหน่ง'; }
+    }
+    setOut(k, vol, pan);
+    if (txt) { const t = $(`#vcTiles [data-k="${CSS.escape(k)}"] [data-d]`); if (t) t.textContent = txt; }
   });
-}, 300);
+  if (TN.sim) { const dx = TN.simPos.x - TN.me.x, dy = TN.simPos.y - TN.me.y, d = Math.hypot(dx, dy); simSet(proxVolume(d, TN.R), panOf(dx, d)); }
+}
+setInterval(audioTick, 200);
+
+
+/* ===================== ห้องจูนเสียง (ทดสอบก่อนเข้าเกม) ===================== */
+const TN = { on: false, mode: 'view', cam: { x: 0, y: 0 }, me: { x: 0, y: 0 }, pos: {}, R: parseInt(LS.get('fv_tune_r')) || 24, scale: 6, raf: 0, sim: null, simPos: { x: 16, y: -9 }, drag: null, sentAt: 0, tap: 0, dpr: 1, init: false };
+const TN_WORLD = 300;
+function onPos(p) { if (p && p.from && p.from !== me.key && isFinite(p.x) && isFinite(p.y)) TN.pos[p.from] = { x: +p.x, y: +p.y, t: Date.now() }; }
+function tnSend(force) {
+  if (V.room !== 'tune' || !V.ch || !V.ready) return;
+  const n = Date.now(); if (!force && n - TN.sentAt < 120) return; TN.sentAt = n;
+  try { V.ch.send({ type: 'broadcast', event: 'pos', payload: { from: me.key, x: +TN.me.x.toFixed(1), y: +TN.me.y.toFixed(1) } }); } catch { }
+}
+setInterval(() => { if (V.room === 'tune') tnSend(true); }, 1500);
+
+/* เพื่อนจำลอง: เสียง "ปิ๊บ" วนเป็นจังหวะ ไว้ลองคนเดียว */
+function simStart() {
+  const AC = window.AudioContext || window.webkitAudioContext; V.ctx = V.ctx || new AC(); V.ctx.resume && V.ctx.resume();
+  const c = V.ctx, osc = c.createOscillator(), env = c.createGain(), gain = c.createGain(), pan = c.createStereoPanner ? c.createStereoPanner() : null;
+  osc.type = 'triangle'; osc.frequency.value = 494; env.gain.value = 0; gain.gain.value = 0;
+  osc.connect(env); env.connect(gain); if (pan) { gain.connect(pan); pan.connect(c.destination); } else gain.connect(c.destination);
+  osc.start();
+  const iv = setInterval(() => { const t = c.currentTime; env.gain.cancelScheduledValues(t); env.gain.setValueAtTime(0.0001, t); env.gain.linearRampToValueAtTime(0.7, t + 0.03); env.gain.exponentialRampToValueAtTime(0.001, t + 0.4); osc.frequency.setValueAtTime(Math.random() < 0.5 ? 494 : 659, t); }, 700);
+  TN.sim = { osc, env, gain, pan, iv };
+}
+function simSet(vol, pan) { const s = TN.sim; if (!s || !V.ctx) return; const t = V.ctx.currentTime; s.gain.gain.setTargetAtTime(cl(vol, 0, 1), t, 0.06); if (s.pan) s.pan.pan.setTargetAtTime(cl(pan, -1, 1), t, 0.06); }
+function simStop() { const s = TN.sim; if (!s) return; clearInterval(s.iv); try { s.osc.stop(); s.osc.disconnect(); s.env.disconnect(); s.gain.disconnect(); } catch { } TN.sim = null; }
+
+function tnOpen() {
+  if (TN.on) return; TN.on = true;
+  if (!TN.init) { TN.init = true; const m = mcMe(); if (m && m.hear_range) TN.R = m.hear_range; }
+  $('#tnRange').value = TN.R; $('#tnRangeV').textContent = TN.R + ' บล็อก';
+  $$('#tnCurve [data-cv]').forEach(b => b.classList.toggle('on', b.dataset.cv === curveKey));
+  tnMode(TN.mode, true); tnPanel(); tnLoop();
+}
+function tnClose() {
+  if (!TN.on) return; TN.on = false; cancelAnimationFrame(TN.raf);
+  if (TN.sim) { simStop(); const s = $('#tnSim'); if (s) s.checked = false; }
+}
+function tnMode(m, quiet) {
+  TN.mode = m; $('#tnView').classList.toggle('on', m === 'view'); $('#tnMove').classList.toggle('on', m === 'move');
+  $('#tnHint').textContent = m === 'view' ? 'โหมดดูแผนที่ — ลากนิ้วเพื่อเลื่อนมุมมอง · แตะ 2 ครั้งเพื่อกลับมาที่ตัวเรา' : 'โหมดเดินตัวเรา — ลากนิ้วเพื่อเดิน เข้าใกล้เพื่อนแล้วเสียงจะค่อยๆ ดังขึ้น';
+  if (m === 'move' && !quiet) { TN.cam.x = TN.me.x; TN.cam.y = TN.me.y; }
+}
+function tnPanel() {
+  const j = $('#tnJoin'); if (!j) return;
+  const inRoom = V.room === 'tune', cnt = Object.values(V.members).filter(m => m.room === 'tune').length;
+  j.innerHTML = inRoom ? ic('hangup') + ' ออกจากห้องจูน' : ic('mic') + ' เปิดไมค์ ทดสอบกับเพื่อน';
+  j.classList.toggle('danger', inRoom);
+  $('#tnRoom').textContent = inRoom ? `ในห้องจูน ${cnt} คน — ให้เพื่อนเข้าห้องนี้ด้วย แล้วลองเดินห่าง/เข้าใกล้กัน` : 'ยังไม่ได้เข้าห้อง — ลอง "เพื่อนจำลอง" ด้านล่างได้โดยไม่ต้องมีเพื่อน';
+  $('#tnLink').textContent = M.link ? `ตัวละครในเกม: ${M.link.mc_name}` : 'ยังไม่ได้ผูกชื่อเกม (แท็บ "เกม") — ทดสอบได้ แต่ปุ่ม "ใช้ค่านี้ในเกม" ต้องผูกก่อน';
+}
+function tnFollow() {           // กล้องตามตัวเราเมื่อใกล้ขอบจอ
+  const cv = $('#tnCv'), w = cv.clientWidth, h = cv.clientHeight, mg = 70;
+  const sx = w / 2 + (TN.me.x - TN.cam.x) * TN.scale, sy = h / 2 + (TN.me.y - TN.cam.y) * TN.scale;
+  if (sx > w - mg) TN.cam.x += (sx - (w - mg)) / TN.scale; if (sx < mg) TN.cam.x -= (mg - sx) / TN.scale;
+  if (sy > h - mg) TN.cam.y += (sy - (h - mg)) / TN.scale; if (sy < mg) TN.cam.y -= (mg - sy) / TN.scale;
+}
+function tnDraw() {
+  const cv = $('#tnCv'); TN.dpr = Math.min(2, window.devicePixelRatio || 1);
+  const r = cv.getBoundingClientRect(), W = Math.round(r.width * TN.dpr), H = Math.round(r.height * TN.dpr); if (!W || !H) return;
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  const g = cv.getContext('2d'), S = TN.scale * TN.dpr, D = TN.dpr;
+  const cs = getComputedStyle($('#pg-hub')), ac = (cs.getPropertyValue('--accent') || '#00a6d6').trim() || '#00a6d6', ink = (cs.getPropertyValue('--ink') || '#223').trim() || '#223', mu = (cs.getPropertyValue('--muted') || '#789').trim() || '#789';
+  const sx = x => W / 2 + (x - TN.cam.x) * S, sy = y => H / 2 + (y - TN.cam.y) * S;
+  g.clearRect(0, 0, W, H);
+  // จุดตาราง (ทุก 8 บล็อก)
+  const gs = 8 * S; g.fillStyle = mu; g.globalAlpha = 0.32;
+  if (gs > 14) for (let x = ((W / 2 - TN.cam.x * S) % gs + gs) % gs; x < W; x += gs) for (let y = ((H / 2 - TN.cam.y * S) % gs + gs) % gs; y < H; y += gs) { g.beginPath(); g.arc(x, y, 1.3 * D, 0, 7); g.fill(); }
+  g.globalAlpha = 1;
+  const mx = sx(TN.me.x), my = sy(TN.me.y), R = TN.R;
+  // วงระยะที่ได้ยิน + วงดังเต็ม + วงครึ่งเสียง
+  const grd = g.createRadialGradient(mx, my, 0, mx, my, R * S); grd.addColorStop(0, ac); grd.addColorStop(1, 'transparent');
+  g.globalAlpha = 0.16; g.fillStyle = grd; g.beginPath(); g.arc(mx, my, R * S, 0, 7); g.fill();
+  g.globalAlpha = 0.55; g.strokeStyle = ac; g.lineWidth = 1.5 * D; g.setLineDash([6 * D, 6 * D]); g.beginPath(); g.arc(mx, my, R * S, 0, 7); g.stroke(); g.setLineDash([]);
+  const inn = innerR(R), half = inn + (1 - Math.pow(0.5, 1 / CURVES[curveKey])) * (R - inn);
+  g.globalAlpha = 0.3; g.beginPath(); g.arc(mx, my, half * S, 0, 7); g.setLineDash([2 * D, 5 * D]); g.stroke(); g.setLineDash([]);
+  g.globalAlpha = 0.55; g.fillStyle = mu; g.font = `${10 * D}px sans-serif`; g.textAlign = 'center';
+  g.fillText('ครึ่งเสียง', mx, my - half * S - 4 * D); g.fillText(R + ' บล็อก', mx, my - R * S - 5 * D);
+  g.globalAlpha = 1;
+  // โหนดของเพื่อน
+  const nodes = [], now = Date.now();
+  Object.entries(TN.pos).forEach(([k, q]) => { const m = V.members[k]; if (m && m.room === 'tune' && V.room === 'tune' && now - q.t < 6000) nodes.push({ x: q.x, y: q.y, name: m.name || '?', k }); });
+  if (TN.sim) nodes.push({ x: TN.simPos.x, y: TN.simPos.y, name: 'เพื่อนจำลอง', sim: true });
+  nodes.forEach(n => {
+    const dx = n.x - TN.me.x, dy = n.y - TN.me.y, d = Math.hypot(dx, dy), vol = proxVolume(d, R), px = sx(n.x), py = sy(n.y);
+    const inside = px > 14 * D && px < W - 14 * D && py > 14 * D && py < H - 14 * D;
+    const col = n.sim ? '#f59e0b' : '#7c5cff';
+    if (!inside) {                                                   // ลูกศรชี้ทิศเพื่อนที่อยู่นอกจอ
+      const ex = cl(px, 18 * D, W - 18 * D), ey = cl(py, 18 * D, H - 18 * D), ang = Math.atan2(py - H / 2, px - W / 2);
+      g.save(); g.translate(ex, ey); g.rotate(ang); g.fillStyle = col; g.globalAlpha = 0.85; g.beginPath(); g.moveTo(9 * D, 0); g.lineTo(-6 * D, 6 * D); g.lineTo(-6 * D, -6 * D); g.fill(); g.restore();
+      g.globalAlpha = 0.9; g.fillStyle = ink; g.font = `${10 * D}px sans-serif`; g.textAlign = 'center'; g.fillText(n.name + ' · ' + Math.round(d), cl(ex, 40 * D, W - 40 * D), ey + (ey < H / 2 ? 18 * D : -10 * D)); g.globalAlpha = 1; return;
+    }
+    const sp = n.k && levels.get(n.k) && (() => { const l = levels.get(n.k); l.an.getByteTimeDomainData(l.buf); let s = 0; for (let i = 0; i < l.buf.length; i++) { const v = (l.buf[i] - 128) / 128; s += v * v; } return Math.sqrt(s / l.buf.length) > 0.035; })();
+    g.globalAlpha = 0.3 + 0.7 * vol; g.fillStyle = col; g.beginPath(); g.arc(px, py, 15 * D, 0, 7); g.fill();
+    if (sp || n.sim) { g.strokeStyle = col; g.lineWidth = 2 * D; g.globalAlpha = 0.5; g.beginPath(); g.arc(px, py, (22 + 3 * Math.sin(now / 120)) * D, 0, 7); g.stroke(); }
+    g.globalAlpha = 1; g.fillStyle = '#fff'; g.font = `600 ${12 * D}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText((n.name[0] || '?').toUpperCase(), px, py + D); g.textBaseline = 'alphabetic';
+    g.fillStyle = ink; g.font = `${11 * D}px sans-serif`; g.fillText(n.name, px, py + 30 * D);
+    g.fillStyle = mu; g.fillText(`${Math.round(vol * 100)}% · ${distTxt(d)} บล็อก`, px, py + 43 * D);
+  });
+  // ตัวเรา: วงกลมโปร่งแสง (ไม่บังแผนที่)
+  g.globalAlpha = 0.28; g.fillStyle = ac; g.beginPath(); g.arc(mx, my, 17 * D, 0, 7); g.fill();
+  g.globalAlpha = 0.95; g.strokeStyle = ac; g.lineWidth = 2 * D; g.beginPath(); g.arc(mx, my, 17 * D, 0, 7); g.stroke();
+  g.fillStyle = ac; g.beginPath(); g.arc(mx, my, 3.5 * D, 0, 7); g.fill();
+  g.fillStyle = ink; g.font = `600 ${11 * D}px sans-serif`; g.textAlign = 'center'; g.fillText('คุณ', mx, my + 33 * D);
+  g.globalAlpha = 1;
+}
+function tnMeter() {
+  const l = levels.get(me.key), bar = $('#tnMeterBar'); if (!bar) return;
+  if (!l || V.muted) { bar.style.width = '0%'; return; }
+  l.an.getByteTimeDomainData(l.buf); let s = 0; for (let i = 0; i < l.buf.length; i++) { const v = (l.buf[i] - 128) / 128; s += v * v; }
+  bar.style.width = Math.round(cl(Math.sqrt(s / l.buf.length) * 400, 0, 100)) + '%';
+}
+function tnLoop() { if (!TN.on) return; tnDraw(); tnMeter(); TN.raf = requestAnimationFrame(tnLoop); }
+
+(function tnWire() {
+  const cv = $('#tnCv'); if (!cv) return;
+  cv.addEventListener('pointerdown', e => { try { cv.setPointerCapture(e.pointerId); } catch { } TN.drag = { x: e.clientX, y: e.clientY, moved: 0 }; });
+  cv.addEventListener('pointermove', e => {
+    const d = TN.drag; if (!d) return; const dx = e.clientX - d.x, dy = e.clientY - d.y; d.x = e.clientX; d.y = e.clientY; d.moved += Math.abs(dx) + Math.abs(dy);
+    if (TN.mode === 'view') { TN.cam.x = cl(TN.cam.x - dx / TN.scale, -TN_WORLD, TN_WORLD); TN.cam.y = cl(TN.cam.y - dy / TN.scale, -TN_WORLD, TN_WORLD); }
+    else { TN.me.x = cl(TN.me.x + dx / TN.scale, -TN_WORLD, TN_WORLD); TN.me.y = cl(TN.me.y + dy / TN.scale, -TN_WORLD, TN_WORLD); tnFollow(); tnSend(); audioTick(); }
+  });
+  const up = () => {
+    const d = TN.drag; TN.drag = null; if (!d) return;
+    if (d.moved < 6) { const n = Date.now(); if (n - TN.tap < 320) { TN.cam.x = TN.me.x; TN.cam.y = TN.me.y; } TN.tap = n; }
+    else tnSend(true);
+  };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  $('#tnView').onclick = () => tnMode('view'); $('#tnMove').onclick = () => tnMode('move');
+  $('#tnZi').onclick = () => { TN.scale = cl(TN.scale * 1.25, 2.5, 16); }; $('#tnZo').onclick = () => { TN.scale = cl(TN.scale / 1.25, 2.5, 16); };
+  $('#tnJoin').onclick = () => { if (V.room === 'tune') leave(); else joinRoom('tune', 'ห้องจูนเสียง').then(() => tnSend(true)); };
+  $('#tnRange').addEventListener('input', e => { TN.R = parseInt(e.target.value); $('#tnRangeV').textContent = TN.R + ' บล็อก'; LS.set('fv_tune_r', TN.R); audioTick(); });
+  $('#tnCurve').addEventListener('click', e => { const b = e.target.closest('[data-cv]'); if (!b) return; curveKey = b.dataset.cv; LS.set('fv_curve', curveKey); $$('#tnCurve [data-cv]').forEach(x => x.classList.toggle('on', x === b)); audioTick(); });
+  $('#tnSim').addEventListener('change', e => { if (e.target.checked) { simStart(); toast('เพื่อนจำลองส่งเสียงปิ๊บ — ลองเดินเข้าใกล้/ออกห่าง'); } else simStop(); });
+  $('#tnApply').onclick = async () => {
+    if (!M.link) return toast('ผูกชื่อเกมที่แท็บ "เกม" ก่อนนะ');
+    const r = await sb().rpc('mc_set_my', { p_mic: null, p_range: TN.R }); if (r.error) return toast('บันทึกไม่สำเร็จ: ' + r.error.message);
+    const p = mcMe(); if (p) p.hear_range = TN.R; M.sig = ''; toast(`ตั้งระยะได้ยินในเกมเป็น ${TN.R} บล็อกแล้ว (ไอเทมในเกมซิงก์ให้เอง)`);
+  };
+})();
 
 /* ---- แท็บ "ควบคุม" (เฉพาะ OP): GUI ตั้งค่าเว็บ + สั่งคำสั่งในเกม ---- */
 const SWATCH = ['#00a6d6', '#7c5cff', '#ec4899', '#ef4444', '#f97316', '#eab308', '#22c55e', '#111111'];
@@ -527,7 +710,8 @@ function setTab(t) {
   tab = t;
   $$('#hubTabs .hub-t').forEach(b => b.classList.toggle('on', b.dataset.t === t));
   $('#hubText').hidden = t !== 'text'; $('#hubVoice').hidden = t !== 'voice';
-  $('#hubMc').hidden = t !== 'mc'; $('#hubCtl').hidden = t !== 'ctl';
+  $('#hubMc').hidden = t !== 'mc'; $('#hubCtl').hidden = t !== 'ctl'; $('#hubTune').hidden = t !== 'tune';
+  if (t === 'tune') tnOpen(); else tnClose();
   if (t === 'mc') { renderMc(true); loadPlayers(); }
   if (t === 'ctl') { buildCtl(); syncCtl(); }
   if (t === 'text') { T.unread.delete(T.cur); renderChans(); badge(); renderMsgs(true); }
