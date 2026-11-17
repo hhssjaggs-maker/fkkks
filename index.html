@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Fontaine AI · Furina & Focalors</title>
-<meta name="theme-color" content="#c8d8e1">
-<link rel="icon" href="furina-icon.jpg">
+<title>Blood Reign Project</title>
+<meta name="theme-color" content="#0a0508">
+<link rel="icon" href="br-fav.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body data-mode="furina" data-cloud="0">
@@ -17,6 +17,7 @@
 <!-- พื้นหลังทะเล -->
 <div class="bg bg-furina"></div>
 <div class="bg bg-code"></div>
+<div class="bg-vig" aria-hidden="true"></div>
 <canvas id="bubbles"></canvas>
 <div class="waves" aria-hidden="true">
   <svg class="wave w1" viewBox="0 0 1440 120" preserveAspectRatio="none"><path d="M0 60 C180 20 540 100 720 60 C900 20 1260 100 1440 60 L1440 120 L0 120Z"/></svg>
@@ -26,9 +27,9 @@
 <!-- ด่านเข้าระบบ: Google / Discord -->
 <div id="gate" class="gate" data-state="loading" hidden>
   <div class="gate-card glass">
-    <div class="cover"><img src="furina.jpg" alt="Furina"><div class="cover-fade"></div></div>
-    <h1>Fontaine AI</h1>
-    <p class="sub">โรงละครแห่งฟองแตน · เข้าสู่ระบบเพื่อเริ่มต้น</p>
+    <div class="cover"><span class="cover-glow"></span><img src="br-logo.png" alt="Blood Reign"><div class="cover-fade"></div></div>
+    <h1>BLOOD REIGN</h1>
+    <p class="sub">PROJECT · เข้าสู่ระบบเพื่อเริ่มต้น</p>
 
     <div class="g-pane" data-for="loading"><div class="typing"><i></i><i></i><i></i></div></div>
 
@@ -77,16 +78,16 @@
   <section class="page on" id="pg-chat" data-p="chat">
     <header class="top glass">
       <div class="brand">
-      <div class="orb"><img src="furina-icon.jpg" alt=""></div>
+      <div class="orb"><img src="br-icon.png" alt=""></div>
       <div class="brand-t">
-        <b id="pName">ฟูริน่า</b>
-        <small id="pTag">Furina · โหมดสนทนา</small>
+        <b id="pName">Blood Reign</b>
+        <small id="pTag">Blood Reign · โหมดสนทนา</small>
       </div>
     </div>
       <div class="seg" id="seg" role="tablist" aria-label="โหมด">
       <span class="thumb"></span>
-      <button class="seg-b active" data-m="furina" role="tab"><svg class="i " aria-hidden="true"><use href="#i-crown"/></svg><span>Furina</span></button>
-      <button class="seg-b" data-m="code" role="tab"><svg class="i " aria-hidden="true"><use href="#i-code"/></svg><span>Focalors Code</span></button>
+      <button class="seg-b active" data-m="furina" role="tab"><svg class="i " aria-hidden="true"><use href="#i-crown"/></svg><span>Reign</span></button>
+      <button class="seg-b" data-m="code" role="tab"><svg class="i " aria-hidden="true"><use href="#i-code"/></svg><span>Reign Code</span></button>
     </div>
     </header>
 
@@ -118,7 +119,7 @@
 
     <div class="st-scroll">
       <div class="st-card glass">
-        <textarea id="imgPrompt" rows="3" placeholder="อยากให้วาดอะไร? เช่น ฟูริน่ากำลังแสดงบนเวทีที่ท่วมด้วยน้ำใส"></textarea>
+        <textarea id="imgPrompt" rows="3" placeholder="อยากให้วาดอะไร? เช่น อัศวินเงาดำยืนกลางสายฝนเลือด ฉากหลังเมืองไซเบอร์"></textarea>
         <div id="imgRefs" class="refs" hidden></div>
         <p id="imgRefHint" class="hint" hidden>ผู้ให้บริการนี้ไม่รองรับรูปอ้างอิง — รูปที่แนบจะไม่ถูกใช้</p>
         <div class="st-actions">

@@ -7,7 +7,7 @@ const CFG = window.AI_CONFIG, Runner = window.Runner, Auth = window.Auth;
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const KEY = 'fontaine_ai_v2', OLD_KEY = 'fontaine_ai_v1';
-const ICON = 'furina-icon.jpg';
+const ICON = 'br-icon.png';
 const ic = (n, c = '') => `<svg class="i ${c}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
 
 /* ---------- state ---------- */
@@ -43,7 +43,8 @@ let busy = false, abortCtl = null, pending = [], pvStop = null;
 /* ---------- helpers ---------- */
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('show'), 2600); }
-const persona = (mode = S.mode) => CFG.PERSONAS[mode === 'code' ? 'focalors' : 'furina'];
+const BRAND = { furina: { name: 'Blood Reign', tag: 'Blood Reign · โหมดสนทนา' }, focalors: { name: 'Reign Code', tag: 'Reign Code · โหมดโค้ดขั้นสูง' } };
+const persona = (mode = S.mode) => { const k = mode === 'code' ? 'focalors' : 'furina'; return Object.assign({}, CFG.PERSONAS[k], BRAND[k]); };
 const sb = () => Auth.sb;
 function relTime(iso) {
   const d = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -222,8 +223,8 @@ function paintSoon(m) { if (rafId) return; rafId = requestAnimationFrame(() => {
 
 function greeting() {
   return S.mode === 'code'
-    ? '*ผิวน้ำนิ่งสนิท แสงสีฟ้าเรืองรองไหลเป็นสายโค้ดบนหน้าจอ* ข้าคือโฟคาลอร์ส… บอกมาเถิดว่าต้องการสร้างระบบอะไร ข้าจะเขียนให้สมบูรณ์ แล้วทดสอบรันในเงาน้ำก่อนส่งให้เจ้าทุกครั้ง 🧪'
-    : '*สาดแสงสปอตไลต์ลงกลางเวที แล้วหมุนตัวหนึ่งรอบอย่างสง่างาม* ยินดีต้อนรับสู่โรงละครของข้า! ข้าคือฟูริน่า ดาราเอกแห่งฟองแตน… มีอะไรอยากคุยหรืออยากให้ช่วยก็บอกมาได้เลย~ (ถ้าอยากให้เขียนโค้ด พิมพ์ว่า "เปลี่ยนโหมดเป็นเขียนโค้ดขั้นสูง" ได้เลยนะ)';
+    ? '*เงาสีม่วงเข้มไหลเป็นสายโค้ดบนหน้าจอมืด* ข้าคือ Reign Code… บอกมาเถิดว่าต้องการสร้างระบบอะไร ข้าจะเขียนให้สมบูรณ์ แล้วทดสอบรันก่อนส่งให้เจ้าทุกครั้ง 🧪'
+    : '*เงาสีแดงเลือดไหลวาบผ่านหน้าจอมืด* ยินดีต้อนรับสู่ Blood Reign Project… ข้าคือผู้เฝ้าประตูแห่งค่ายนี้ มีอะไรอยากคุยหรืออยากให้ช่วยก็บอกมาได้เลย~ (ถ้าอยากให้เขียนโค้ด พิมพ์ว่า "เปลี่ยนโหมดเป็นเขียนโค้ดขั้นสูง" ได้เลยนะ)';
 }
 function renderAll() {
   chat.innerHTML = '';
@@ -319,7 +320,7 @@ function setMode(m, announce = true) {
   if (S.mode === m) return;
   S.mode = m; applyMode();
   if (announce) {
-    const n = { role: 'system', notice: true, done: true, text: m === 'code' ? '⚡ ร่างเปลี่ยนเป็น Focalors — โหมดเขียนโค้ดขั้นสูง' : '🎭 กลับเป็นฟูริน่า — โหมดสนทนา' };
+    const n = { role: 'system', notice: true, done: true, text: m === 'code' ? '⚡ เปลี่ยนเป็น Reign Code — โหมดเขียนโค้ดขั้นสูง' : '🩸 กลับเป็น Blood Reign — โหมดสนทนา' };
     cur.messages.push(n); addMsg(n); scrollDown(true); persist(n);
   }
   if (Auth.cloud && cur.id) sb().from('conversations').update({ mode: m }).eq('id', cur.id).then(() => {}, () => {});
@@ -330,7 +331,7 @@ function applyMode() {
   $$('.seg-b').forEach(b => b.classList.toggle('active', b.dataset.m === S.mode));
   $('#pName').textContent = persona().name; $('#pTag').textContent = persona().tag;
   $('#input').placeholder = S.mode === 'code' ? 'สั่งงานโค้ด…' : 'พิมพ์ข้อความ…';
-  document.querySelector('meta[name=theme-color]').content = S.mode === 'code' ? '#0a3447' : '#c8d8e1';
+  document.querySelector('meta[name=theme-color]').content = S.mode === 'code' ? '#0b0614' : '#0a0508';
   renderQuick();
 }
 $$('.seg-b').forEach(b => b.onclick = () => setMode(b.dataset.m));
@@ -496,7 +497,7 @@ const PROVIDER_FN = {
     })];
     return {
       model, url: S.baseUrl.openai.replace(/\/$/, '') + '/chat/completions',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + S.apiKey, 'X-Title': 'Fontaine AI' },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + S.apiKey, 'X-Title': 'Blood Reign Project' },
       body: { model, messages, stream: true, max_tokens: CFG.MAX_TOKENS },
       parse: (j, on) => { const d = j.choices?.[0]?.delta?.content; if (d) on(d); }
     };
@@ -673,7 +674,7 @@ async function regen() {
   await runTurn(um, S.mode);
 }
 function exportChat() {
-  const L = [`# ${cur.title}`, `_ส่งออกจาก Fontaine AI · ${new Date().toLocaleString('th-TH')}_`, ''];
+  const L = [`# ${cur.title}`, `_ส่งออกจาก Blood Reign Project · ${new Date().toLocaleString('th-TH')}_`, ''];
   const n0 = L.length;
   cur.messages.filter(m => !m.notice && !m.hidden && !m.draft && m.text).forEach(m => L.push(`## ${m.role === 'user' ? 'ผู้ใช้' : persona(m.mode).name}`, '', fixFences(m.text), ''));
   if (L.length === n0) return toast('ยังไม่มีข้อความให้ส่งออก');
@@ -857,26 +858,27 @@ document.addEventListener('pointerdown', e => {
   b.append(el); setTimeout(() => el.remove(), 650);
 });
 
-/* ---------- bubbles background ---------- */
+/* ---------- embers background (Blood Reign) ---------- */
 (function bubbles() {
   const cv = $('#bubbles'), cx = cv.getContext('2d');
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   let W, H, dpr, list = [];
   const resize = () => { dpr = Math.min(devicePixelRatio || 1, 2); W = cv.width = innerWidth * dpr; H = cv.height = innerHeight * dpr; };
   resize(); addEventListener('resize', resize);
-  const mk = (init) => ({ x: Math.random() * W, y: init ? Math.random() * H : H + 20, r: (3 + Math.random() * 11) * dpr, v: (.2 + Math.random() * .6) * dpr, ph: Math.random() * 6.28, a: .25 + Math.random() * .35 });
-  for (let i = 0; i < 28; i++) list.push(mk(true));
+  const mk = (init) => ({ x: Math.random() * W, y: init ? Math.random() * H : H + 20, r: (.8 + Math.random() * 2.6) * dpr, v: (.25 + Math.random() * .7) * dpr, ph: Math.random() * 6.28, a: .25 + Math.random() * .5, w: Math.random() < .12 });
+  for (let i = 0; i < 46; i++) list.push(mk(true));
   (function loop(t) {
     if (!document.hidden) {
       cx.clearRect(0, 0, W, H);
       const code = document.body.dataset.mode === 'code';
       list.forEach((b, i) => {
-        b.y -= b.v; b.x += Math.sin(t / 1100 + b.ph) * .4 * dpr;
+        b.y -= b.v; b.x += Math.sin(t / 1300 + b.ph) * .35 * dpr;
         if (b.y < -30) list[i] = mk(false);
-        const g = cx.createRadialGradient(b.x - b.r * .3, b.y - b.r * .3, b.r * .1, b.x, b.y, b.r);
-        g.addColorStop(0, `rgba(255,255,255,${b.a + .2})`); g.addColorStop(1, code ? `rgba(94,191,224,${b.a * .3})` : `rgba(0,173,193,${b.a * .25})`);
-        cx.fillStyle = g; cx.beginPath(); cx.arc(b.x, b.y, b.r, 0, 6.283); cx.fill();
-        cx.strokeStyle = `rgba(255,255,255,${b.a * .8})`; cx.lineWidth = dpr; cx.stroke();
+        const fl = .6 + .4 * Math.sin(t / 380 + b.ph * 3), al = b.a * fl * Math.min(1, b.y / (H * .35));
+        const col = b.w ? '255,255,255' : code ? '150,70,255' : '225,20,45';
+        const g = cx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r * 4);
+        g.addColorStop(0, `rgba(${col},${al})`); g.addColorStop(1, `rgba(${col},0)`);
+        cx.fillStyle = g; cx.beginPath(); cx.arc(b.x, b.y, b.r * 4, 0, 6.283); cx.fill();
       });
     }
     requestAnimationFrame(loop);

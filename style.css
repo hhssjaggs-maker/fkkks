@@ -654,3 +654,135 @@ body.in-lobby .app{padding-bottom:12px}
 .tn-cv{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.tn-cv .btn.on{background:var(--accent);color:#fff}
 .tn-open{margin-top:10px;width:100%}
 @media (max-width:420px){.hub-t span{font-size:11px}.hub-t{padding-left:6px;padding-right:6px}}
+
+/* =====================================================================
+   BLOOD REIGN PROJECT — ธีม ดำ · ขาว · แดงเลือด · ม่วงเข้ม
+   (วางท้ายไฟล์เพื่อทับธีมเดิม ทุกหน้าใช้ตัวแปรสีชุดนี้)
+   ===================================================================== */
+:root{--br-red:#e11d2e;--br-red2:#9f0f22;--br-pur:#6d28d9;--br-pur2:#2e0f5c;--br-bk:#07040a;
+  --navbg:rgba(18,9,15,.96);--navink:#8f7d86;--navshadow:0 14px 34px rgba(0,0,0,.7)}
+[data-mode="furina"]{
+  --ink:#f4eef0; --muted:#a8989f;
+  --glass:rgba(20,10,16,.66); --glass-b:rgba(225,29,46,.26);
+  --accent:#ef2b3d; --accent2:#a3122a; --accent-soft:rgba(225,29,46,.16);
+  --user:linear-gradient(135deg,#e11d2e,#8b0f22); --user-ink:#fff;
+  --bot:rgba(26,14,21,.82); --act:#9d8d95;
+  --shadow:0 12px 34px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.03) inset;
+  --input:rgba(14,7,11,.85); --wave1:rgba(225,29,46,.18); --wave2:rgba(109,40,217,.14);
+  --ok:#2ee6a6; --bad:#ff5468; --warn:#f2c14e;
+}
+[data-mode="code"]{
+  --ink:#f1ecfa; --muted:#a79bbf;
+  --glass:rgba(16,9,30,.68); --glass-b:rgba(139,92,246,.32);
+  --accent:#9d6bff; --accent2:#5b21b6; --accent-soft:rgba(139,92,246,.18);
+  --user:linear-gradient(135deg,#7c3aed,#3b0f7a); --user-ink:#fff;
+  --bot:rgba(22,12,40,.84); --act:#9c90b5;
+  --shadow:0 12px 36px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.03) inset;
+  --input:rgba(11,6,22,.88); --wave1:rgba(139,92,246,.2); --wave2:rgba(225,29,46,.12);
+  --ok:#2ee6a6; --bad:#ff5468; --warn:#f2c14e;
+  --navbg:rgba(14,8,26,.96);--navink:#8b7fa6;
+}
+body{font-family:'Prompt',system-ui,sans-serif;background:var(--br-bk)}
+.bg-furina{background:
+  radial-gradient(900px 520px at 12% -5%,rgba(225,29,46,.22),transparent 60%),
+  radial-gradient(800px 560px at 100% 25%,rgba(109,40,217,.20),transparent 62%),
+  radial-gradient(700px 300px at 50% 115%,rgba(225,29,46,.28),transparent 70%),
+  linear-gradient(180deg,#0a0508 0%,#0c0610 55%,#12050a 100%)}
+.bg-code{background:
+  radial-gradient(900px 520px at 85% -5%,rgba(124,58,237,.30),transparent 60%),
+  radial-gradient(700px 520px at 0% 45%,rgba(225,29,46,.14),transparent 62%),
+  radial-gradient(700px 300px at 50% 115%,rgba(109,40,217,.32),transparent 70%),
+  linear-gradient(180deg,#07040f 0%,#0b0618 55%,#100620 100%)}
+.bg-vig{position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(120% 90% at 50% 40%,transparent 45%,rgba(0,0,0,.65) 100%),
+  repeating-linear-gradient(0deg,rgba(255,255,255,.018) 0 1px,transparent 1px 3px)}
+/* คลื่นน้ำเดิม → แสงเลือดเต้นช้าๆ ด้านล่าง */
+.waves{height:120px;opacity:.9}
+.w1 path{fill:var(--wave1)}.w2 path{fill:var(--wave2)}
+.glass{backdrop-filter:blur(16px) saturate(1.25);-webkit-backdrop-filter:blur(16px) saturate(1.25)}
+.top{position:relative}
+.top::after{content:"";position:absolute;left:14px;right:14px;bottom:-1px;height:1px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:.7;animation:brline 5s ease-in-out infinite}
+@keyframes brline{50%{opacity:.25;transform:scaleX(.7)}}
+.brand-t b{font-family:'Orbitron','Prompt',sans-serif;letter-spacing:1.5px;font-size:15px;font-weight:700;text-transform:uppercase}
+.brand-t small{letter-spacing:.4px}
+/* โลโก้ในวงกลม */
+.orb{background:radial-gradient(circle at 50% 40%,#2a0a12,#0a0508 75%);box-shadow:0 0 0 1.5px var(--accent),0 0 18px var(--accent-soft),0 0 34px var(--accent-soft);animation:float 4s ease-in-out infinite,orbglow 3.4s ease-in-out infinite}
+.orb img{object-fit:contain;padding:3px}
+@keyframes orbglow{50%{box-shadow:0 0 0 1.5px var(--accent),0 0 26px var(--accent),0 0 46px var(--accent-soft)}}
+.av{background:radial-gradient(circle at 50% 40%,#2a0a12,#0a0508 78%);box-shadow:0 0 0 1px var(--accent),0 4px 14px var(--accent-soft)}
+.av img{object-fit:contain;padding:2px}
+.av.code{background:radial-gradient(circle at 50% 40%,#20083f,#07040f 78%);box-shadow:0 0 0 1.5px #9d6bff,0 0 16px rgba(139,92,246,.7)}
+.msg.user .av{background:linear-gradient(135deg,#3a3a3f,#16161a);color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.25)}
+.bubble{box-shadow:0 6px 20px rgba(0,0,0,.35)}
+.msg.user .bubble{box-shadow:0 8px 24px var(--accent-soft)}
+.msg.user .act{color:rgba(255,255,255,.8)}
+.code{background:#09050f;color:#efe9fb;border:1px solid rgba(139,92,246,.35)}
+.code-h{background:rgba(139,92,246,.14);color:#c8b3ff}
+/* ปุ่ม: ประกายกวาด + เรืองแสง + กดยุบ */
+.btn{position:relative;overflow:hidden;background:var(--accent-soft);border:1px solid var(--glass-b);
+  transition:transform .35s var(--spring),box-shadow .35s var(--ease),background .3s,filter .3s,border-color .3s}
+.btn::before{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 35%,rgba(255,255,255,.22) 50%,transparent 65%);transform:translateX(-120%);transition:transform .7s var(--ease);pointer-events:none}
+.btn:hover::before{transform:translateX(120%)}
+.btn:hover{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset,0 8px 24px var(--accent-soft),0 0 22px var(--accent-soft)}
+.btn.primary,.btn.toggle[aria-pressed="true"],.btn.send{background:var(--user);color:#fff;border-color:transparent;box-shadow:0 6px 22px var(--accent-soft)}
+.btn.primary:hover,.btn.send:hover{box-shadow:0 10px 30px var(--accent),0 0 0 1px rgba(255,255,255,.18) inset;filter:brightness(1.12)}
+.btn.send{animation:sendpulse 3.2s ease-in-out infinite}
+@keyframes sendpulse{50%{box-shadow:0 6px 22px var(--accent-soft),0 0 0 7px transparent}0%,100%{box-shadow:0 6px 22px var(--accent-soft),0 0 0 0 var(--accent-soft)}}
+.ripple{background:rgba(255,255,255,.35)}
+.seg{background:rgba(255,255,255,.04);border-color:var(--glass-b)}
+.seg .thumb{background:var(--user);box-shadow:0 4px 18px var(--accent-soft)}
+.seg-b{color:var(--muted)}.seg-b.active{color:#fff}
+.btn.discord{background:#5865F2}
+.btn.google{background:#fff;color:#2b3a42!important}
+input,textarea,select{caret-color:var(--accent)}
+input::placeholder,textarea::placeholder{color:var(--muted);opacity:.75}
+textarea,input[type=text],input[type=password],input[type=url],input[type=search],select{background:var(--input);color:var(--ink);border-color:var(--glass-b)}
+textarea:focus,input:focus,select:focus{border-color:var(--accent)!important;box-shadow:0 0 0 3px var(--accent-soft)!important;outline:none}
+/* modal / drawer / toast */
+.modal-wrap{background:rgba(3,1,6,.62)}
+body[data-mode="furina"] .modal,body[data-mode="code"] .modal,body[data-mode="furina"] .drawer,body[data-mode="code"] .drawer{background:rgba(14,7,12,.96)}
+body[data-mode="code"] .modal,body[data-mode="code"] .drawer{background:rgba(11,6,22,.96)}
+.toast{background:rgba(18,9,15,.96);color:#fff;border:1px solid var(--accent);box-shadow:0 8px 28px var(--accent-soft)}
+body[data-mode="furina"] .toast,body[data-mode="code"] .toast{background:rgba(18,9,15,.96);color:#fff}
+/* ด่านเข้าระบบ */
+.gate{background:radial-gradient(800px 500px at 50% 0%,rgba(225,29,46,.28),transparent 65%),radial-gradient(700px 500px at 100% 100%,rgba(109,40,217,.28),transparent 60%),#07040a}
+.gate-card{background:rgba(14,7,12,.88);border:1px solid rgba(225,29,46,.4);box-shadow:0 0 0 1px rgba(255,255,255,.04) inset,0 20px 60px rgba(0,0,0,.7),0 0 50px rgba(225,29,46,.18)}
+.cover{height:230px;background:radial-gradient(circle at 50% 45%,rgba(225,29,46,.22),transparent 65%)}
+.cover-glow{position:absolute;left:50%;top:48%;width:150px;height:150px;margin:-75px 0 0 -75px;border-radius:50%;background:radial-gradient(circle,rgba(225,29,46,.55),transparent 70%);filter:blur(14px);animation:orbglow2 3.6s ease-in-out infinite}
+@keyframes orbglow2{50%{transform:scale(1.35);opacity:.6}}
+.cover img{position:relative;object-fit:contain;object-position:50% 50%;padding:14px 0;filter:drop-shadow(0 0 14px rgba(225,29,46,.7));animation:logofloat 5s ease-in-out infinite}
+@keyframes logofloat{50%{transform:translateY(-6px) scale(1.03)}}
+.cover-fade{background:linear-gradient(transparent,rgba(14,7,12,.98))}
+.gate h1{font-family:'Orbitron',sans-serif;font-weight:900;font-size:28px;letter-spacing:5px;margin-top:-30px;background:linear-gradient(90deg,#fff,#ff4a5c,#fff);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 4s linear infinite}
+@keyframes shine{to{background-position:-200% 0}}
+.gate .sub{color:#b9a8b0;letter-spacing:2px;font-size:12px;text-transform:uppercase}
+.gate label,.gate .who{color:#f1e8ec}.gate label small,.gate .who small,.gmsg{color:#a8989f}
+.gate input{background:rgba(255,255,255,.06);border:1px solid rgba(225,29,46,.4);color:#fff}
+.gate input:focus{border-color:#ef2b3d;box-shadow:0 0 0 4px rgba(225,29,46,.2)}
+.gate .btn{color:#f1e8ec}.gate .btn.primary,.gate .btn.discord{color:#fff}
+.gate .btn.google{color:#2b3a42}
+.gate .typing i{background:#ef2b3d}
+/* แท็บล่าง */
+.nav-bar{filter:drop-shadow(0 -2px 14px rgba(225,29,46,.22)) drop-shadow(0 10px 18px rgba(0,0,0,.6));border:0}
+.nav-dot{box-shadow:0 0 26px var(--accent),0 0 0 4px var(--navbg),0 0 0 5px var(--accent)}
+@keyframes dotpulse{50%{box-shadow:0 0 38px var(--accent),0 0 0 4px var(--navbg),0 0 0 9px transparent}}
+body[data-mode="code"]{--navbg:rgba(14,8,26,.96);--navink:#8b7fa6}
+body[data-mode="furina"]{--navbg:rgba(18,9,15,.96);--navink:#8f7d86}
+#seg{display:grid;grid-template-columns:1fr 1fr;gap:0;padding:4px;border-radius:999px}
+#seg .seg-b,#seg button{background:none;padding:8px 12px;font-size:14px;border-radius:999px;color:var(--muted)}
+#seg .seg-b.active{color:#fff}
+body[data-mode="code"] .nav-dot{box-shadow:0 0 26px #8b5cf6,0 0 0 4px var(--navbg),0 0 0 5px #8b5cf6}
+/* ชุมชน / จูนเสียง */
+.hub-tabs{border-color:var(--glass-b)}
+.tn-wrap{background:radial-gradient(circle at 50% 50%,rgba(225,29,46,.10),rgba(7,4,10,.9) 75%);border-color:var(--glass-b)}
+.tn-b.on,.chip-b.on,.rat-b.on,.cnt-b.on{background:var(--user);color:#fff}
+.me-av,.lb-ic{background:var(--user)}
+.badge{background:var(--br-red)}
+.mc-b{background:#2ee6a6;color:#04120c}
+.vc-b.off,.vc-b.leave,.vc-pb.off,.vc-pb.red{background:#c4152a}
+/* ตัวเลื่อน/สวิตช์ */
+.rg::-webkit-slider-thumb{border-color:#fff;background:var(--accent)}
+::selection{background:rgba(225,29,46,.45);color:#fff}
+*{scrollbar-color:rgba(225,29,46,.4) transparent}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:rgba(225,29,46,.4);border-radius:8px}
+@media (prefers-reduced-motion:reduce){.btn.send,.orb,.cover img,.cover-glow,.gate h1,.top::after{animation:none}}

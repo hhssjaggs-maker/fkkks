@@ -33,7 +33,7 @@ const STYLES = [
   ['neon', 'ไซเบอร์พังค์', 'cyberpunk, neon lights, rainy night city, cinematic, high contrast'],
   ['sketch', 'สเก็ตช์', 'pencil sketch, hand drawn, cross hatching, monochrome'],
   ['fantasy', 'แฟนตาซี', 'epic fantasy concept art, dramatic atmosphere, intricate details, volumetric light'],
-  ['fontaine', 'ฟองแตน', 'baroque theatrical aesthetic, flowing water and glass-like light, blue and white palette, elegant stage lighting, dreamy']
+  ['bloodreign', 'Blood Reign', 'dark cyber-gothic aesthetic, stark black and white with blood red accents, sharp angular glyphs, deep purple haze, high contrast, dramatic']
 ];
 const RATIOS = { '1:1': [1024, 1024], '3:4': [896, 1152], '4:3': [1152, 896], '16:9': [1344, 768], '9:16': [768, 1344] };
 
@@ -278,7 +278,7 @@ $('#mImg .close').onclick = closeViewer;
 $('#vDl').onclick = async () => {
   if (!viewing) return;
   const ext = (viewing.blob?.type || '').split('/')[1]?.replace('jpeg', 'jpg') || 'png';
-  const a = document.createElement('a'); a.download = `fontaine-${viewing.ts}.${ext}`; a.href = urlOf(viewing); a.target = '_blank'; a.rel = 'noopener';
+  const a = document.createElement('a'); a.download = `bloodreign-${viewing.ts}.${ext}`; a.href = urlOf(viewing); a.target = '_blank'; a.rel = 'noopener';
   document.body.append(a); a.click(); a.remove();
 };
 $('#vCopy').onclick = async () => { try { await navigator.clipboard.writeText(viewing.prompt); B().toast('คัดลอก prompt แล้ว'); } catch { B().toast('คัดลอกไม่ได้'); } };
